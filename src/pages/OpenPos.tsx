@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import '../styles/OpenPos.css'; // Importa el CSS específico para esta página
+
 import Breadcrumb from '../components/Breadcrumb';
 import Header from '../components/header2';
 import Filters from '../components/Filters';
