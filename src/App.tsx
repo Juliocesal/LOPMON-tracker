@@ -5,7 +5,6 @@ import Sidebar from './components/Sidebar';
 import Loading from './components/Loading';
 import './App.css';
 import CreateTicket from './pages/CreateTicket';
-import ViewTickets from './pages/ViewTickets';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import Reports from './pages/Reports';

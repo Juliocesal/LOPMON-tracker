@@ -14,7 +14,6 @@ interface TicketFormProps {
 
 const TicketForm: React.FC<TicketFormProps> = ({ ticket, onSuccess, onCancel }) => {
   const { user } = useUser();
-  const [currentUserName, setCurrentUserName] = useState<string>('');
   
   const [formData, setFormData] = useState({
     location: ticket?.location || '',
@@ -38,7 +37,6 @@ const TicketForm: React.FC<TicketFormProps> = ({ ticket, onSuccess, onCancel }) 
         const { data: authData } = await supabase.auth.getUser();
         const userEmail = authData.user?.email || 'Usuario';
         
-        setCurrentUserName(user.full_name || userEmail);
         
         // Si es un nuevo ticket, establecer el created_by automáticamente
         if (!ticket) {

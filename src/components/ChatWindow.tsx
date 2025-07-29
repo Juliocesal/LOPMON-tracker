@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import { supabase } from '../utils/supabaseClient';
 import { Message } from '../hooks/types';

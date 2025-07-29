@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react';
 // src/components/ProtectedRoute.tsx
-import React, { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import Loading from './Loading';
