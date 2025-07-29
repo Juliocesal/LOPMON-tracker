@@ -7,7 +7,7 @@ import { useNotifications } from '../contexts/NotificationContext';
 import toast, { Toaster } from 'react-hot-toast';
 import Loading from '../components/Loading';
 import '../styles/chatWindow.css';
-import '../styles/OpenPos.css'; // Importa el CSS específico para esta página
+
 
 
 const ChatPage = () => {
