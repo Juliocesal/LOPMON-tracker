@@ -1,0 +1,148 @@
+/* Estilos globales */
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: #f3f4f6;
+}
+
+/* Contenedor principal del chat */
+.flex-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f3f4f6;
+}
+
+/* Loader animado */
+.loader {
+  border-top-color: #3498db;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mensajes del sistema (esperando agente) */
+.text-center {
+  text-align: center;
+}
+
+.text-center p {
+  color: #4b5563;
+  font-size: 1rem;
+}
+
+/* Notificación de agente conectado */
+.text-green-500 {
+  color: #22c55e;
+  font-weight: bold;
+}
+
+/* ChatWindow */
+.chat-window {
+  width: 100%;
+  max-width: 480px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Área de mensajes */
+.messages-container {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.message {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  max-width: 75%;
+  word-wrap: break-word;
+}
+
+.message.bot {
+  background-color: #e5e7eb;
+  align-self: flex-start;
+}
+
+.message.user {
+  background-color: #3b82f6;
+  color: white;
+  align-self: flex-end;
+}
+
+/* Área de entrada de mensajes */
+.input-container {
+  display: flex;
+  padding: 8px 16px;
+  border-top: 1px solid #e5e7eb;
+  background-color: #fafafa;
+}
+
+.input-container input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.3s ease;
+}
+
+.input-container input:focus {
+  border-color: #3b82f6;
+}
+
+.input-container button {
+  margin-left: 8px;
+  padding: 8px 16px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.input-container button:hover {
+  background-color: #2563eb;
+}
+
+/* Botón de "Nuevo chat" */
+.new-chat-button {
+  padding: 12px 24px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.new-chat-button:hover {
+  background-color: #2563eb;
+}
+
+/* Estado de chat cerrado */
+.chat-closed {
+  text-align: center;
+  color: #4b5563;
+  font-size: 1.2rem;
+}
+
+.chat-closed button {
+  margin-top: 16px;
+}

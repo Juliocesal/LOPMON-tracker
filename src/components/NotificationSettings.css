@@ -1,0 +1,85 @@
+/* src/components/NotificationSettings.css */
+
+.notification-settings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.05);
+  border: 1px solid rgba(37, 99, 235, 0.1);
+}
+
+.notification-settings.compact {
+  padding: 2px;
+  gap: 4px;
+}
+
+.notification-control {
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 32px;
+  height: 32px;
+}
+
+.notification-settings.compact .notification-control {
+  padding: 6px;
+  min-width: 28px;
+  height: 28px;
+}
+
+.notification-control:hover {
+  background: rgba(37, 99, 235, 0.15);
+  border-color: rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.notification-control.active {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  border-color: #2563eb;
+  color: white;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.notification-control.active:hover {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+/* Animación para estados activos */
+.notification-control.active svg {
+  animation: notificationPulse 2s infinite;
+}
+
+@keyframes notificationPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .notification-settings {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .notification-control span {
+    display: none;
+  }
+}

@@ -1,0 +1,149 @@
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    font-size: 18px;
+    color: #6c757d;
+  }
+
+  /* Reset to ensure fixed positioning works correctly */
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* src/App.css */
+#voiceflow-chatbot-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 350px;
+  height: 500px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+  .app-container {
+    display: flex;
+    min-height: 100%;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .content {
+    flex: 1;
+    min-height: 100vh;
+    background-color: #f9fafb;
+    /* Default: Full width */
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* Private sidebar always shows with margin */
+  .content.with-sidebar {
+    margin-left: 320px; /* Ancho del sidebar privado */
+  }
+
+  /* Public sidebar responsive behavior */
+  .content.with-public-sidebar {
+    /* Mobile: Full width */
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* Tablet: Add margin for public sidebar */
+  @media (min-width: 768px) {
+    .content.with-public-sidebar {
+      margin-left: 260px;
+    }
+  }
+
+  /* Desktop: Increase margin for wider public sidebar */
+  @media (min-width: 1024px) {
+    .content.with-public-sidebar {
+      margin-left: 320px;
+    }
+  }
+
+  /* Mobile sidebar overlay background - Only for public routes */
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1050;
+    display: none;
+  }
+
+  .sidebar-overlay.active {
+    display: block;
+  }
+
+  /* Hide overlay on tablet and desktop */
+  @media (min-width: 768px) {
+    .sidebar-overlay {
+      display: none !important;
+    }
+  }
+
+  /* Mobile menu button - Only for public routes */
+  .mobile-menu-button {
+    position: fixed;
+    top: 0;
+    left: 1rem;
+    z-index: 1060;
+    background: #0d323d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 0.5rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+  }
+
+  /* Move button to the right when sidebar is open */
+  .mobile-menu-button.sidebar-open {
+    left: calc(280px - 0.03rem);
+    top: 0;
+    background: #dc2626;
+    margin: 0;
+    border: 0;
+  }
+
+  .mobile-menu-button:hover {
+    background: #004777;
+    transform: scale(1.05);
+  }
+
+  /* Hide mobile menu button on tablet and desktop */
+  @media (min-width: 768px) {
+    .mobile-menu-button {
+      display: none;
+    }
+  }
+
+  /* src/App.css */
+.sidebar {
+  display: none; /* Oculta el Sidebar por defecto */
+}
+
+.show-sidebar {
+  display: block; /* Muestra el Sidebar cuando es necesario */
+}
