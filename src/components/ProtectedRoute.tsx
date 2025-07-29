@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 // src/components/ProtectedRoute.tsx
 import { useState, useEffect } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
