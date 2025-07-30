@@ -1,3 +1,7 @@
+.header-content-right {
+  flex-direction: row;
+  justify-content: flex-end;
+}
 /* Container centrado para el chat - Mobile First para rutas públicas */
 .chat-window-center-container {
   display: flex;

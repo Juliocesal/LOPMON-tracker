@@ -132,79 +132,46 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const renderHeaderContent = () => {
     const state = getHeaderState();
-    
+    let icon, statusClass, extra = null;
     switch (state) {
       case 'loading':
-        return (
-          <div className="header-content">
-            <div className="header-icon loading">
-              <div className="spinner"></div>
-            </div>
-            <div className="header-text">
-              <div className="header-title">Iniciando Sesión</div>
-              <div className="header-subtitle">Cargando interfaz de chat...</div>
-            </div>
-          </div>
-        );
-      
+        icon = <div className="spinner"></div>;
+        statusClass = 'loading';
+        break;
       case 'connected':
-        return (
-          <div className="header-content">
-            <div className="header-icon connected">
-              <span>👤</span>
-            </div>
-            <div className="header-text">
-              <div className="header-title">Agente Conectado</div>
-              <div className="header-subtitle">{agentName} • En línea</div>
-            </div>
-            <div className="status-indicator connected"></div>
-          </div>
-        );
-      
+        icon = <span>👤</span>;
+        statusClass = 'connected';
+        break;
       case 'waiting':
-        return (
-          <div className="header-content">
-            <div className="header-icon waiting">
-              <div className="pulse-ring"></div>
-              <span>⏳</span>
-            </div>
-            <div className="header-text">
-              <div className="header-title">Conectando Agente</div>
-              <div className="header-subtitle">Un agente se unirá en breve...</div>
-            </div>
-            <div className="status-indicator waiting"></div>
-          </div>
-        );
-      
+        icon = <span>⏳</span>;
+        statusClass = 'waiting';
+        extra = <div className="pulse-ring"></div>;
+        break;
       case 'closed':
-        return (
-          <div className="header-content">
-            <div className="header-icon closed">
-              <span>🔒</span>
-            </div>
-            <div className="header-text">
-              <div className="header-title">Sesión Finalizada</div>
-              <div className="header-subtitle">El chat ha sido cerrado por el agente</div>
-            </div>
-            <div className="status-indicator closed"></div>
-          </div>
-        );
-      
-      default: // processing
-        return (
-          <div className="header-content">
-            <div className="header-icon processing">
-              <div className="processing-spinner"></div>
-              <span>🤖</span>
-            </div>
-            <div className="header-text">
-              <div className="header-title">Asistente Virtual</div>
-              <div className="header-subtitle">Procesando su consulta...</div>
-            </div>
-            <div className="status-indicator processing"></div>
-          </div>
-        );
+        icon = <span>�</span>;
+        statusClass = 'closed';
+        break;
+      default:
+        icon = <><div className="processing-spinner"></div><span>🤖</span></>;
+        statusClass = 'processing';
+        break;
     }
+    return (
+      <div className="header-content header-content-right">
+        <div className="header-text">
+          {state === 'loading' && <><div className="header-title">Iniciando Sesión</div><div className="header-subtitle">Cargando interfaz de chat...</div></>}
+          {state === 'connected' && <><div className="header-title">Agente Conectado</div><div className="header-subtitle">{agentName} • En línea</div></>}
+          {state === 'waiting' && <><div className="header-title">Conectando Agente</div><div className="header-subtitle">Un agente se unirá en breve...</div></>}
+          {state === 'closed' && <><div className="header-title">Sesión Finalizada</div><div className="header-subtitle">El chat ha sido cerrado por el agente</div></>}
+          {state === 'processing' && <><div className="header-title">Asistente Virtual</div><div className="header-subtitle">Procesando su consulta...</div></>}
+        </div>
+        <div className={`header-icon ${statusClass}`} style={{ position: 'relative', marginLeft: 'auto' }}>
+          {icon}
+          <div className={`status-indicator ${statusClass}`}></div>
+          {extra}
+        </div>
+      </div>
+    );
   };
 
   return (
