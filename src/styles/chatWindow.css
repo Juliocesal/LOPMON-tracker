@@ -3,20 +3,21 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 1rem;
-  min-height: 100vh;
-  height: 100vh;
+  padding: 4.5rem 1rem 1rem 1rem; /* padding-top en vez de margin-top */
+  min-height: calc(100vh - 4.5rem); /* Ajusta para que no haya overflow */
+  height: auto;
   background: linear-gradient(135deg, #ffffff 0%, #eef2f6 100%);
   /* Mobile: Full width para rutas públicas */
   width: 100%;
-  margin-top: 120px; /* Solo mobile: baja aún más el chat */
 }
 
 /* Tablet: Account for public sidebar */
 @media (min-width: 768px) {
   .chat-window-center-container {
     padding: 1.5rem;
-    margin-top: 0; /* Quita el margen en tablet y desktop */
+    padding-top: 1.5rem;
+    min-height: 100vh;
+    height: 100vh;
   }
   
   /* Solo aplicar margin cuando hay public sidebar */
