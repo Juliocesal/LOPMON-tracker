@@ -570,6 +570,8 @@
 .header-text {
   flex: 1;
   min-width: 0;
+  text-align: right;
+  margin-left: auto;
 }
 
 .header-title {
