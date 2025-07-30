@@ -11,7 +11,6 @@
   min-height: calc(100vh - 4.5rem); /* Ajusta para que no haya overflow */
   height: auto;
   background: linear-gradient(135deg, #ffffff 0%, #eef2f6 100%);
-  /* Mobile: Full width para rutas públicas */
   width: 100%;
 }
 
@@ -49,14 +48,35 @@
   }
 }
 
+/* Mobile: pantalla completa */
+@media (max-width: 767px) {
+  .chat-window-center-container {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    min-height: 100vh;
+    padding: 0;
+    box-sizing: border-box;
+    z-index: 1000;
+  }
+  .chat-window {
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
+    max-height: 100%;
+  }
+}
+
 /* Ventana del chat - Mobile First */
 .chat-window {
   width: 100%;
   max-width: 100%;
-  height: 85vh;
+  height: 100%;
+  max-height: 100%;
   background: #ffffff;
-  border-radius: 0.75rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
