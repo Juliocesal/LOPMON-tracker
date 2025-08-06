@@ -146,3 +146,13 @@ body {
 .chat-closed button {
   margin-top: 16px;
 }
+
+/* Media query para tablets: centrar verticalmente el contenedor principal */
+@media (min-width: 600px) and (max-width: 1024px) {
+  .flex-container {
+    height: 100vh;
+    align-items: center;
+    justify-content: center;
+    display: flex;
+  }
+}
