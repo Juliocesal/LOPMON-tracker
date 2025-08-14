@@ -21,6 +21,7 @@ import HxHInbound from './components/hxh-inbound';
 import ExceptionsTotes from './components/ExceptionsTotes';
 import OpenPosOp from './components/OpenPosOp';
 import TicketsPage from './pages/TicketsPage'; // Importar la página de tickets
+import Overs from './components/Overs';
 
 // Usa React.lazy para cargar OpenPos dinámicamente
 const OpenPos = React.lazy(() => import('./pages/OpenPos'));
@@ -46,15 +47,15 @@ const AppContent: React.FC = () => {
             {/* Public routes */}
             <Route path="/login" element={!user ? <Login /> : <Navigate to="/openpos" />} />
             <Route path="/chat" element={<ChatPage />} />
-            <Route path="/exception-storage" element={<ExceptionsTotes />} />
             <Route path="/openposOp" element={<OpenPosOp />} />
             <Route path="/exceptions-totes" element={<ExceptionsTotes />} />
             <Route path="/hxh-inbound" element={<HxHInbound />} />
 
             {/* Protected routes */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<Navigate replace to="/openpos" />} />
+              <Route path="/" element={<Navigate replace to="/view-tickets" />} />
               <Route path="/view-tickets" element={<TicketsPage />} />
+              <Route path="/Overs" element={<Overs/>} />
               <Route path="/history" element={<History />} />
               <Route path="/openpos" element={<OpenPos />} />
               <Route path="/settings" element={<Settings />} />

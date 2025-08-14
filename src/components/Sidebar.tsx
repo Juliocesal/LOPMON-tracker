@@ -103,11 +103,11 @@ const Sidebar: React.FC = () => {
             </li>
             <li>
               <NavLink 
-                to="/exception-storage" 
+                to="/Overs" 
                 className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
               >
                 <i className="fas fa-warehouse"></i>
-                Exception storage
+                Registro de overs
               </NavLink>
             </li>
             <li>
