@@ -63,51 +63,65 @@ const ChatPage = () => {
   useEffect(() => {
     if (!chatId) return;
 
-    console.log('[ChatPage] Suscribiéndose a cambios en tiempo real para chatId:', chatId); // LOG para identificar ID usado en la subscripción
+    let isSubscribed = true;
+    let subscription: any;
 
-    const subscription = supabase
-      .channel(`public:chats:${chatId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'chats',
-          filter: `id=eq.${chatId}`,
-        },
-        (payload) => {
-          const updatedChat = payload.new;
+    const subscribeToChannel = () => {
+      console.log('[ChatPage] Suscribiéndose a cambios en tiempo real para chatId:', chatId);
 
-          // Verificar si el chat ha sido cerrado
-          if (updatedChat.status === 'resolved') {
-            setIsChatClosed(true);
-            if (!toastShown) {
-              toast('🔒 El agente ha cerrado el chat.', {
-                icon: '🔕',
-                duration: 4000,
-                style: {
-                  background: '#fff',
-                  color: '#333',
-                  border: '1px solid #ccc',
-                },
-              });
-              setToastShown(true); // Evitar duplicación
+      subscription = supabase
+        .channel(`public:chats:${chatId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'chats',
+            filter: `id=eq.${chatId}`,
+          },
+          (payload) => {
+            const updatedChat = payload.new;
+
+            // Verificar si el chat ha sido cerrado
+            if (updatedChat.status === 'resolved') {
+              setIsChatClosed(true);
+              if (!toastShown) {
+                toast('🔒 El agente ha cerrado el chat.', {
+                  icon: '🔕',
+                  duration: 4000,
+                  style: {
+                    background: '#fff',
+                    color: '#333',
+                    border: '1px solid #ccc',
+                  },
+                });
+                setToastShown(true); // Evitar duplicación
+              }
+            }
+
+            // Notificar cuando el agente se conecta
+            if (updatedChat.agent_connected) {
+              setAgentConnected(true);
+              setAgentName(updatedChat.agent_name || 'Agente Desconocido'); // Guardar el nombre del agente
+              // Notificación global
+              notifySuccess(`El agente ${updatedChat.agent_name || 'Desconocido'} se ha conectado al chat`);
             }
           }
-
-          // Notificar cuando el agente se conecta
-          if (updatedChat.agent_connected) {
-            setAgentConnected(true);
-            setAgentName(updatedChat.agent_name || 'Agente Desconocido'); // Guardar el nombre del agente
-            // Notificación global
-            notifySuccess(`El agente ${updatedChat.agent_name || 'Desconocido'} se ha conectado al chat`);
+        )
+        .on('broadcast', { event: 'disconnect' }, () => {
+          console.warn('[ChatPage] Canal desconectado, reintentando suscripción...');
+          if (isSubscribed) {
+            setTimeout(subscribeToChannel, 1000); // Reintenta en 1 segundo
           }
-        }
-      )
-      .subscribe();
+        })
+        .subscribe();
+    };
+
+    subscribeToChannel();
 
     return () => {
-      subscription.unsubscribe();
+      isSubscribed = false;
+      if (subscription) subscription.unsubscribe();
     };
   }, [chatId, toastShown]);
 
