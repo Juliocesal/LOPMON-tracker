@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from '../utils/supabaseClient';
 
-const TableRow = ({ children }: { children: React.ReactNode }) => <tr>{children}</tr>;
-
 const OpenPos = () => {
   const [recibos, setRecibos] = useState<any[]>([]);
-  const [materiales, setMateriales] = useState<{ [ticketId: number]: any[] }>({});
   const [editReciboId, setEditReciboId] = useState<number | null>(null);
   const [editReciboData, setEditReciboData] = useState<any>({});
   const [editMateriales, setEditMateriales] = useState<any[]>([]);
@@ -21,15 +18,6 @@ const OpenPos = () => {
         .select('*')
         .order('fecha_registro', { ascending: false });
       setRecibos(recibosData || []);
-      const { data: materialesData } = await supabase
-        .from('material_faltante')
-        .select('*');
-      const agrupadas: { [ticketId: number]: any[] } = {};
-      (materialesData || []).forEach(m => {
-        if (!agrupadas[m.ticket_id]) agrupadas[m.ticket_id] = [];
-        agrupadas[m.ticket_id].push(m);
-      });
-      setMateriales(agrupadas);
       setLoading(false);
     };
     fetchAll();
