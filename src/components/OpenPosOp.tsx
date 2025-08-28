@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import '../styles/OpenPosOp.css';
+import { supabase } from '../utils/supabaseClient'; // Asegúrate de tener la instancia
 
 // Constants
 const STATUS_OPTIONS = [
@@ -99,22 +100,26 @@ function OpenPosOp() {
   const [filters, setFilters] = useState<FilterState>({
     receiptNumber: '',
     user: '',
-    status: ''
+    status: '' // Solo para registro, no para filtrar
   });
+  const [poRecibos, setPoRecibos] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [insertLoading, setInsertLoading] = useState(false);
+  const [insertMessage, setInsertMessage] = useState<string | null>(null);
 
-  // Filter logic with loading simulation
-  const filteredOrders = useMemo(() => {
-    return mockPurchaseOrders.filter(order => {
-      const matchesReceipt = !filters.receiptNumber || 
-        order.receiptNumber.toLowerCase().includes(filters.receiptNumber.toLowerCase());
-      const matchesUser = !filters.user || 
-        order.user.toLowerCase().includes(filters.user.toLowerCase());
-      const matchesStatus = !filters.status || order.status === filters.status;
-      
-      return matchesReceipt && matchesUser && matchesStatus;
-    });
-  }, [filters]);
+  // Cargar las POs ingresadas desde la tabla po_recibos_incompletos
+  useEffect(() => {
+    const fetchPOs = async () => {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('po_recibos_incompletos')
+        .select('*')
+        .order('fecha_registro', { ascending: false });
+      if (!error) setPoRecibos(data || []);
+      setIsLoading(false);
+    };
+    fetchPOs();
+  }, [insertLoading]); // Recarga cuando se ingresa una nueva PO
 
   const handleInputChange = useCallback((field: keyof FilterState, value: string) => {
     setIsLoading(true);
@@ -129,6 +134,36 @@ function OpenPosOp() {
     setTimeout(() => setIsLoading(false), 300);
   }, []);
 
+  const handleInsertPO = useCallback(async () => {
+    setInsertLoading(true);
+    setInsertMessage(null);
+
+    // Validar campo requerido
+    if (!filters.receiptNumber) {
+      setInsertMessage('Debes ingresar el número de recibo.');
+      setInsertLoading(false);
+      return;
+    }
+
+    // Insertar en la tabla po_recibos_incompletos
+    const { error } = await supabase
+      .from('po_recibos_incompletos')
+      .insert([{
+        usuario: filters.user || 'Desconocido',
+        numero_recibo: filters.receiptNumber,
+        fecha_registro: new Date().toISOString(),
+        status: 'Abierto'
+      }]);
+
+    if (error) {
+      setInsertMessage('Error al ingresar la PO: ' + error.message);
+    } else {
+      setInsertMessage('PO ingresada correctamente.');
+      setFilters({ receiptNumber: '', user: '', status: '' });
+    }
+    setInsertLoading(false);
+  }, [filters]);
+
   const isFiltersEmpty = !filters.receiptNumber && !filters.user && !filters.status;
 
   return (
@@ -139,7 +174,6 @@ function OpenPosOp() {
       <div className="open-pos-op__header">OPEN POs</div>
       
       <div className="open-pos-op__container">
-        {/* Left Panel - Filters */}
         <div className="open-pos-op__left-panel">
           <div className="open-pos-op__welcome-text">
             <span className="open-pos-op__welcome-title">
@@ -156,8 +190,8 @@ function OpenPosOp() {
             type="text"
             placeholder="Ingresa el No. de recibo"
             value={filters.receiptNumber}
-            onChange={(e) => handleInputChange('receiptNumber', e.target.value)}
-            disabled={isLoading}
+            onChange={(e) => setFilters(prev => ({ ...prev, receiptNumber: e.target.value }))}
+            disabled={insertLoading}
           />
           
           <input
@@ -165,30 +199,28 @@ function OpenPosOp() {
             type="text"
             placeholder="Usuario"
             value={filters.user}
-            onChange={(e) => handleInputChange('user', e.target.value)}
-            disabled={isLoading}
+            onChange={(e) => setFilters(prev => ({ ...prev, user: e.target.value }))}
+            disabled={insertLoading}
           />
           
-          <select
-            className="open-pos-op__input"
-            value={filters.status}
-            onChange={(e) => handleInputChange('status', e.target.value)}
-            disabled={isLoading}
-          >
-            {STATUS_OPTIONS.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          {/* Elimina el select de estado */}
           
           <button
             className="open-pos-op__button"
-            onClick={handleClearFilters}
-            disabled={isFiltersEmpty || isLoading}
+            onClick={handleInsertPO}
+            disabled={insertLoading || !filters.receiptNumber}
+            type="button"
+            style={{
+              cursor: (insertLoading || !filters.receiptNumber) ? 'not-allowed' : 'pointer'
+            }}
           >
-            {isLoading ? 'Cargando...' : 'Limpiar Filtros'}
+            {insertLoading ? 'Ingresando...' : 'Ingresar'}
           </button>
+          {insertMessage && (
+            <div className="open-pos-op__insert-message">
+              {insertMessage}
+            </div>
+          )}
           
           <div className="open-pos-op__results-count">
             {isLoading ? (
@@ -196,7 +228,7 @@ function OpenPosOp() {
                 <div className="open-pos-op__spinner"></div>
               </div>
             ) : (
-              `${filteredOrders.length} orden(es) encontrada(s)`
+              `${poRecibos.length} orden(es) encontrada(s)`
             )}
           </div>
         </div>
@@ -212,34 +244,32 @@ function OpenPosOp() {
             <table className="open-pos-op__table" role="table" aria-label="Tabla de órdenes de compra">
               <thead>
                 <tr>
-                  {COLUMN_HEADERS.map((header, index) => (
-                    <th key={index} scope="col">
-                      {header}
-                    </th>
-                  ))}
+                  <th>No. De recibo</th>
+                  <th>Fecha</th>
+                  <th>Usuario</th>
+                  <th>Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <td>{order.receiptNumber}</td>
+                {poRecibos.length > 0 ? (
+                  poRecibos.map((po) => (
+                    <TableRow key={po.ticket_id}>
+                      <td>{po.numero_recibo}</td>
                       <td>
-                        {new Date(order.date).toLocaleDateString('es-ES')}
+                        {po.fecha_registro
+                          ? new Date(po.fecha_registro).toLocaleDateString('es-ES')
+                          : ''}
                       </td>
-                      <td>{order.user}</td>
-                      <td>{order.material}</td>
-                      <td>{order.stockId}</td>
-                      <td>{order.quantity}</td>
+                      <td>{po.usuario}</td>
                       <td>
-                        <StatusBadge status={order.status} />
+                        <span className="open-pos-op__status-badge">{po.status}</span>
                       </td>
                     </TableRow>
                   ))
                 ) : (
                   <tr>
-                    <td className="open-pos-op__empty-state" colSpan={COLUMN_HEADERS.length}>
-                      No se encontraron órdenes de compra con los filtros aplicados
+                    <td className="open-pos-op__empty-state" colSpan={4}>
+                      No se encontraron órdenes de compra ingresadas
                     </td>
                   </tr>
                 )}
