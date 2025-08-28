@@ -17,6 +17,9 @@ const AgentDashboard = () => {
   const [userTyping, setUserTyping] = useState<{[chatId: string]: boolean}>({}); // Estado para indicar si el usuario está escribiendo
   const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null); // Timer para el indicador de escribiendo
   const [currentTime, setCurrentTime] = useState(new Date()); // Estado para actualizar tiempo en tiempo real
+  const [closedChats, setClosedChats] = useState<any[]>([]); // Nuevo estado para chats cerrados
+  const [closedChatSearch, setClosedChatSearch] = useState(''); // Estado para el buscador
+  const [closedSortAsc, setClosedSortAsc] = useState(true); // Estado para el orden
   
   // Hook de notificaciones globales
   const { notifyNewChat, notifyNewMessage, settings } = useNotifications();
@@ -484,6 +487,25 @@ const AgentDashboard = () => {
     };
   }, [typingTimeout]);
 
+  // Función para cargar chats cerrados
+  const fetchClosedChats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('*')
+        .in('status', ['resolved', 'closed']);
+      if (error) console.error('Error al cargar chats cerrados:', error);
+      else setClosedChats(data || []);
+    } catch (error) {
+      console.error('Error al cargar chats cerrados:', error);
+    }
+  };
+
+  // Cargar chats cerrados al montar el componente
+  useEffect(() => {
+    fetchClosedChats();
+  }, []);
+
   if (loading) {
     return <Loading message="Cargando panel de soporte..." />;
   }
@@ -534,6 +556,8 @@ const AgentDashboard = () => {
                     statusLabel = 'Cerrado';
                     statusClass = 'chat-status-badge chat-status-badge--cerrado';
                   }
+                  // Usar ticket_id si existe, sino fallback a chat.id
+                  const ticketLabel = chat.ticket_id ? `Ticket #${chat.ticket_id}` : `Chat ID: ${chat.id}`;
                   return (
                     <li
                       key={chat.id}
@@ -544,7 +568,7 @@ const AgentDashboard = () => {
                         <span className="chat-item-title" style={{
                           color: selectedChatId === chat.id ? '#2563eb' : '#263159'
                         }}>
-                          Chat ID: {chat.id}
+                          {ticketLabel}
                         </span>
                         <div className="chat-item-badges">
                           <span className="chat-time-badge">
@@ -710,6 +734,145 @@ const AgentDashboard = () => {
               </div>
             </>
           )}
+        </div>
+
+        {/* Apartado de chats cerrados */}
+        <div className="chats-list closed-chats-list">
+          <div className="chats-list-header">
+            <div className="chats-list-title">
+              <h2 className="font-semibold">Chats Cerrados</h2>
+              {closedChats.length > 0 && (
+                <span className="chats-count-badge">{closedChats.length}</span>
+              )}
+            </div>
+            <div className="header-controls">
+              <button
+                className="reload-button"
+                onClick={fetchClosedChats}
+                title="Recargar chats cerrados"
+              >
+                {/* Icono recargar */}
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                  <path d="M4 4v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M2.05 11A8 8 0 1 0 4 4l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              {/* Botón de orden ascendente/descendente */}
+              <button
+                className="sort-button"
+                onClick={() => setClosedSortAsc((prev) => !prev)}
+                title={closedSortAsc ? "Orden descendente" : "Orden ascendente"}
+                style={{marginLeft: 8, padding: '2px 8px', borderRadius: 4, border: '1px solid #3f12e2ff', background: '#1846a1ff'}}
+              >
+                {closedSortAsc ? (
+                  <>
+                    ↑
+                    <span style={{marginLeft: 4}}>Asc</span>
+                  </>
+                ) : (
+                  <>
+                    ↓
+                    <span style={{marginLeft: 4}}>Desc</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+          {/* Buscador por ticket_id en vez de chatid */}
+          <div style={{margin: '3px 0'}}>
+            <input
+              type="text"
+              placeholder="Buscar por Ticket ID..."
+              value={closedChatSearch}
+              onChange={e => setClosedChatSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '6px 10px',
+                borderRadius: 4,
+                border: '1px solid #ccc',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+          <div className="chat-list-container">
+            {closedChats.length > 0 ? (
+              <ul>
+                {closedChats
+                  .filter(chat => {
+                    const search = closedChatSearch.trim();
+                    if (!search) return true;
+                    // Si el filtro es numérico, busca coincidencia exacta en ticket_id
+                    if (/^\d+$/.test(search)) {
+                      if (chat.ticket_id) {
+                        return String(chat.ticket_id) === search;
+                      }
+                      return chat.id === search;
+                    }
+                    // Si es texto, busca coincidencia parcial en chat.id
+                    return (chat.ticket_id ? String(chat.ticket_id) : chat.id)
+                      .toLowerCase()
+                      .includes(search.toLowerCase());
+                  })
+                  .sort((a, b) => {
+                    // Ordena por ticket_id si existe, sino por chat.id
+                    const aVal = a.ticket_id ? Number(a.ticket_id) : a.id;
+                    const bVal = b.ticket_id ? Number(b.ticket_id) : b.id;
+                    if (closedSortAsc) {
+                      return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    } else {
+                      return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    }
+                  })
+                  .map((chat) => {
+                    const ticketLabel = chat.ticket_id ? `Ticket #${chat.ticket_id}` : `Chat ID: ${chat.id}`;
+                    return (
+                      <li
+                        key={chat.id}
+                        className={`chat-item${selectedChatId === chat.id ? ' chat-item-selected' : ''}`}
+                        onClick={() => setSelectedChatId(chat.id)}
+                      >
+                        <div className="chat-item-content">
+                          <span className="chat-item-title" style={{
+                            color: selectedChatId === chat.id ? '#2563eb' : '#263159'
+                          }}>
+                            {ticketLabel}
+                          </span>
+                          <div className="chat-item-badges">
+                            <span className="chat-time-badge">
+                              {/* Icono de tiempo */}
+                              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                                <circle cx="10" cy="10" r="8" stroke="#888" strokeWidth="2" fill="none"/>
+                                <path d="M10 6V10L13 12" stroke="#888" strokeWidth="2" strokeLinecap="round"/>
+                              </svg>
+                              {calculateElapsedTime(chat.created_at)}
+                            </span>
+                            <span className="chat-status-badge chat-status-badge--cerrado">
+                              {/* Icono cerrado */}
+                              <svg width="10" height="10" viewBox="0 0 10 10" style={{marginRight: 5}}>
+                                <circle cx="5" cy="5" r="4" fill="#888" />
+                              </svg>
+                              Cerrado
+                            </span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            ) : (
+              <div className="no-chats-empty-state">
+                <div className="no-chats-icon">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+                    <path d="M17 9V7C17 4.24 14.76 2 12 2S7 4.24 7 7V9C5.9 9 5 9.9 5 11V19C5 20.1 5.9 21 7 21H17C18.1 21 19 20.1 19 19V11C19 9.9 18.1 9 17 9ZM12 17.5C11.17 17.5 10.5 16.83 10.5 16S11.17 14.5 12 14.5S13.5 15.17 13.5 16S12.83 17.5 12 17.5ZM15.1 9H8.9V7C8.9 5.29 10.29 3.9 12 3.9S15.1 5.29 15.1 7V9Z" fill="#cbd5e1"/>
+                  </svg>
+                </div>
+                <h3 className="no-chats-title">No hay chats cerrados</h3>
+                <p className="no-chats-description">
+                  Los chats cerrados aparecerán aquí para consulta y revisión.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
