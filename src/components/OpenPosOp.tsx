@@ -2,97 +2,16 @@ import React, { useState, useEffect, useCallback } from "react";
 import '../styles/OpenPosOp.css';
 import { supabase } from '../utils/supabaseClient'; // Asegúrate de tener la instancia
 
-// Constants
-const STATUS_OPTIONS = [
-  { value: '', label: 'Todos los estados' },
-  { value: 'Pendiente', label: 'Pendiente' },
-  { value: 'En Proceso', label: 'En Proceso' },
-  { value: 'Completado', label: 'Completado' }
-] as const;
-
-const COLUMN_HEADERS = [
-  'No. De recibo',
-  'Fecha',
-  'Usuario',
-  'Material',
-  'StockID',
-  'Cantidad',
-  'Estado'
-] as const;
-
 // Types
-interface PurchaseOrder {
-  id: string;
-  receiptNumber: string;
-  date: string;
-  user: string;
-  material: string;
-  stockId: string;
-  quantity: number;
-  status: 'Pendiente' | 'Completado' | 'En Proceso';
-}
-
 interface FilterState {
   receiptNumber: string;
   user: string;
   status: string;
 }
 
-// Mock data for demonstration
-const mockPurchaseOrders: PurchaseOrder[] = [
-  {
-    id: "1",
-    receiptNumber: "6803120",
-    date: "2025-04-30",
-    user: "Lopezhej",
-    material: "OOO3242",
-    stockId: "00200432949",
-    quantity: 3,
-    status: "Pendiente"
-  },
-  {
-    id: "2",
-    receiptNumber: "6803121",
-    date: "2025-05-01",
-    user: "Lopezhej",
-    material: "OOO3243",
-    stockId: "00200432950",
-    quantity: 5,
-    status: "En Proceso"
-  },
-  {
-    id: "3",
-    receiptNumber: "6803122",
-    date: "2025-05-02",
-    user: "Martinez",
-    material: "OOO3244",
-    stockId: "00200432951",
-    quantity: 2,
-    status: "Completado"
-  }
-];
-
 // Component for table row with hover effect
 const TableRow: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <tr>{children}</tr>;
-};
-
-// Component for status badge
-const StatusBadge: React.FC<{ status: PurchaseOrder['status'] }> = ({ status }) => {
-  const getStatusClass = () => {
-    switch (status) {
-      case 'Pendiente':
-        return 'open-pos-op__status-badge open-pos-op__status-badge--pendiente';
-      case 'Completado':
-        return 'open-pos-op__status-badge open-pos-op__status-badge--completado';
-      case 'En Proceso':
-        return 'open-pos-op__status-badge open-pos-op__status-badge--en-proceso';
-      default:
-        return 'open-pos-op__status-badge';
-    }
-  };
-
-  return <span className={getStatusClass()}>{status}</span>;
 };
 
 // Main component
@@ -120,19 +39,6 @@ function OpenPosOp() {
     };
     fetchPOs();
   }, [insertLoading]); // Recarga cuando se ingresa una nueva PO
-
-  const handleInputChange = useCallback((field: keyof FilterState, value: string) => {
-    setIsLoading(true);
-    setFilters(prev => ({ ...prev, [field]: value }));
-    // Simulate loading delay
-    setTimeout(() => setIsLoading(false), 300);
-  }, []);
-
-  const handleClearFilters = useCallback(() => {
-    setIsLoading(true);
-    setFilters({ receiptNumber: '', user: '', status: '' });
-    setTimeout(() => setIsLoading(false), 300);
-  }, []);
 
   const handleInsertPO = useCallback(async () => {
     setInsertLoading(true);
@@ -163,8 +69,6 @@ function OpenPosOp() {
     }
     setInsertLoading(false);
   }, [filters]);
-
-  const isFiltersEmpty = !filters.receiptNumber && !filters.user && !filters.status;
 
   return (
     <div className="open-pos-op">
@@ -202,8 +106,6 @@ function OpenPosOp() {
             onChange={(e) => setFilters(prev => ({ ...prev, user: e.target.value }))}
             disabled={insertLoading}
           />
-          
-          {/* Elimina el select de estado */}
           
           <button
             className="open-pos-op__button"
