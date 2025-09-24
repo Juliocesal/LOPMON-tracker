@@ -88,7 +88,7 @@ const PublicSidebar: React.FC = () => {
               </li>
               <li>
                 <NavLink 
-                  to="/exception-storage" 
+                  to="/exceptions-totes" 
                   className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
                   onClick={handleNavClick}
                 >
