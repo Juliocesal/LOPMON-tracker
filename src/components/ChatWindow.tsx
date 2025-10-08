@@ -153,9 +153,87 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     );
   };
 
+  // Optimizar la detección de imágenes y manejo de carga
   const isImageUrl = (text: string) => {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
-    return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
+    if (!text) return false;
+    // Cachear el resultado para evitar múltiples comprobaciones
+    if ((window as any).__imageUrlCache?.[text]) {
+      return (window as any).__imageUrlCache[text];
+    }
+    
+    const isImage = text.includes('storage.googleapis.com') || 
+                   text.includes('supabase.co') ||
+                   /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
+    
+    // Guardar en caché
+    if (!(window as any).__imageUrlCache) {
+      (window as any).__imageUrlCache = {};
+    }
+    (window as any).__imageUrlCache[text] = isImage;
+    
+    return isImage;
+  };
+
+  // Función para pre-cargar imágenes
+  const preloadImage = (url: string) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  // Renderizar mensajes con optimización de imágenes
+  const renderMessage = (msg: Message, index: number) => {
+    const isImage = isImageUrl(msg.text);
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    useEffect(() => {
+      if (isImage) {
+        const loadImage = async () => {
+          try {
+            await preloadImage(msg.text);
+            setIsLoaded(true);
+          } catch (error) {
+            console.error('Error loading image:', error);
+            setIsLoaded(true); // Mostrar fallback en caso de error
+          }
+        };
+        loadImage();
+      }
+    }, [msg.text, isImage]);
+
+    return (
+      <div key={index}>
+        <div className={`message-bubble ${
+          msg.role === 'user' ? 'user' : msg.role === 'agent' ? 'agent' : 'bot'
+        }`}>
+          <strong>
+            {msg.role === 'user' ? 'Usuario' : msg.role === 'agent' ? 'Agente' : 'Bot'}
+          </strong>
+          {isImage ? (
+            <div className="image-container">
+              {!isLoaded && <div className="image-loader" />}
+              <img
+                src={msg.text}
+                alt="Imagen compartida"
+                className={`chat-image ${isLoaded ? 'loaded' : ''}`}
+                loading="lazy"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src = '/path/to/fallback-image.png';
+                }}
+                onClick={() => window.open(msg.text, '_blank')}
+              />
+            </div>
+          ) : (
+            <span>{msg.text}</span>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -174,37 +252,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           ) : (
             <>
-              {liveMessages.map((msg, index) => {
-                const isTransferMessage =
-                  msg.role === 'bot' &&
-                  (msg.text.includes('Perfecto. Un agente se conectará en breve para ayudarte.') ||
-                   msg.text.includes('Un agente se conectará contigo en breve.'));
-                return (
-                  <div key={index}>
-                    <div
-                      className={`message-bubble ${msg.role === 'user' ? 'user' : msg.role === 'agent' ? 'agent' : 'bot'}`}
-                    >
-                      <strong>
-                        {msg.role === 'user' ? 'Usuario' : msg.role === 'agent' ? 'Agente' : 'Bot'}
-                      </strong>
-                      {isImageUrl(msg.text) ? (
-                        <img src={msg.text} alt="Imagen compartida" loading="lazy" />
-                      ) : (
-                        <span>{msg.text}</span>
-                      )}
-                    </div>
-                    {/* Loader justo después del mensaje de transferencia */}
-                    {isTransferMessage && !agentConnected && (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '16px 0' }}>
-                        <div className="loader-bubble" />
-                        <span style={{ fontSize: '0.95em', color: '#888', marginTop: 8 }}>
-                          Esperando a que un agente se una al chat...
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {liveMessages.map((msg, index) => renderMessage(msg, index))}
               {/* Ref para hacer scroll */}
               <div ref={endOfMessagesRef}></div>
             </>
