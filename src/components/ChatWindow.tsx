@@ -80,11 +80,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const showYesNoOptions =
     lastBotMessage && lastBotMessage.includes('es correcto?');
 
-  // Eliminar las otras opciones que ya no necesitamos
-  const showTypeOptions = false;
-  const showFaltanteCorrectionOptions = false;
-  const showSobranteCorrectionOptions = false;
-
   const showSobranteWaitingLoader = liveMessages.some(
     (msg) =>
       msg.role === 'bot' &&
@@ -92,7 +87,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
        msg.text.includes('Un agente se conectará contigo en breve.')) &&
       !agentConnected
   );
-
+  
   const handleOptionClick = (option: string) => {
     onSendMessage(option);
   };
