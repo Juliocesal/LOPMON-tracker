@@ -1,9 +1,37 @@
 import { useEffect, useState, useRef } from 'react';
 import ChatInput from './ChatInput';
 import { supabase } from '../utils/supabaseClient';
-import type { Message } from '../hooks/types';  // Change to type-only import
+import type { Message } from '../hooks/types';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import '../styles/chatWindow.css';
+
+// Utility functions moved to top
+const isImageUrl = (text: string) => {
+  if (!text) return false;
+  if ((window as any).__imageUrlCache?.[text]) {
+    return (window as any).__imageUrlCache[text];
+  }
+  
+  const isImage = text.includes('storage.googleapis.com') || 
+                 text.includes('supabase.co') ||
+                 /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
+  
+  if (!(window as any).__imageUrlCache) {
+    (window as any).__imageUrlCache = {};
+  }
+  (window as any).__imageUrlCache[text] = isImage;
+  
+  return isImage;
+};
+
+const preloadImage = (url: string) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+};
 
 // Extender la interfaz Message para incluir propiedades opcionales
 interface ExtendedMessage extends Message {
@@ -86,12 +114,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [liveMessages, setLiveMessages] = useState<ExtendedMessage[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
-
-  // Ref para el scroll automático
+  const channelRef = useRef<RealtimeChannel | null>(null);
   const endOfMessagesRef = useRef<HTMLDivElement | null>(null);
   const reconnectionAttempts = useRef(0);
   const maxReconnectionAttempts = 3;
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [channelError, setChannelError] = useState<string | null>(null);
 
   // Inicializar con mensajes recibidos
   useEffect(() => {
@@ -104,44 +132,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // Función para manejar la reconexión
   const handleReconnection = async () => {
     if (reconnectionAttempts.current >= maxReconnectionAttempts) {
-      console.error('Máximo número de intentos de reconexión alcanzado');
+      setChannelError('Conexión perdida. Por favor, recarga la página.');
       return;
     }
 
     setIsReconnecting(true);
     reconnectionAttempts.current += 1;
 
-    try {
-      const channel = supabase.channel(`public:messages:${chatId}`);
-      await channel.subscribe();
-      setIsReconnecting(false);
-      reconnectionAttempts.current = 0;
-    } catch (error) {
-      console.error('Error en la reconexión:', error);
-      // Intentar reconectar después de 2 segundos
-      setTimeout(handleReconnection, 2000);
+    if (channelRef.current) {
+      await channelRef.current.unsubscribe();
+      channelRef.current = null;
     }
+
+    setupChannel();
   };
 
-  // Suscripción a cambios en Supabase
-  useEffect(() => {
-    let channel: RealtimeChannel;
-    let isInitialConnection = true;
-
-    const setupChannel = async () => {
-      // Solo mostrar "Reconectando" si no es la conexión inicial
-      if (!isInitialConnection) {
-        setIsReconnecting(true);
+  // Configurar el canal de Supabase
+  const setupChannel = () => {
+    try {
+      if (channelRef.current) {
+        return; // Prevenir suscripciones múltiples
       }
-      
-      channel = supabase.channel(`public:messages:${chatId}`);
+
+      const channel = supabase.channel(`public:messages:${chatId}`);
+      channelRef.current = channel;
 
       channel
-        .on('system', { event: 'disconnect' }, () => {
-          console.log('Desconexión detectada');
-          setIsReconnecting(true);
-          handleReconnection();
-        })
         .on(
           'postgres_changes',
           {
@@ -151,7 +167,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             filter: `chat_id=eq.${chatId}`,
           },
           (payload: any) => {
-            // Si recibimos mensajes, estamos conectados
             setIsReconnecting(false);
             const newMessage: ExtendedMessage = {
               role: payload.new.role,
@@ -161,20 +176,29 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             setLiveMessages((prev) => [...prev, newMessage]);
           }
         )
-        .subscribe((status: string) => {
+        .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            console.log('Conectado exitosamente');
             setIsReconnecting(false);
-            isInitialConnection = false;
+            setChannelError(null);
+            reconnectionAttempts.current = 0;
+          } else if (status === 'CHANNEL_ERROR') {
+            setTimeout(handleReconnection, 1000);
           }
         });
-    };
+    } catch (error) {
+      console.error('Error al configurar el canal:', error);
+      setChannelError('Error de conexión');
+    }
+  };
 
+  // Suscripción a cambios en Supabase
+  useEffect(() => {
     setupChannel();
 
     return () => {
-      if (channel) {
-        channel.unsubscribe();
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
       }
     };
   }, [chatId]);
@@ -269,66 +293,91 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const handleImageUpload = async (file: File) => {
     if (!chatId) return;
 
-    // Guardar el estado actual del scroll
-    const messagesContainer = document.querySelector('.messages-container');
-    const scrollPos = messagesContainer?.scrollTop;
-
     try {
-      // Mostrar indicador de carga temporal con ID único
-      const tempMessage: ExtendedMessage = {
-        role: 'agent',
-        text: 'Subiendo imagen...',
-        id: `temp-${Date.now()}`,
-        temp: true
-      };
+      setUploadStatus('Preparando imagen...');
       
-      setLiveMessages(prev => [...prev, tempMessage]);
-      setUploadStatus('Subiendo imagen...');
-
-      // Comprimir la imagen antes de subir si es necesario
-      let imageToUpload = file;
-      if (file.size > 1024 * 1024) { // Si es mayor a 1MB
-        imageToUpload = await compressImage(file);
+      // Validación más estricta del archivo
+      const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!validTypes.includes(file.type)) {
+        throw new Error('Formato de imagen no soportado. Use JPG, PNG, WEBP o GIF.');
       }
 
-      // Resto del código de subida...
-      const { data, error } = await supabase
-        .storage
-        .from('chat-images')
-        .upload(`public/${chatId}/${Date.now()}_${file.name}`, imageToUpload, {
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        throw new Error('La imagen es demasiado grande. Máximo 5MB.');
+      }
+
+      // Comprimir si es necesario
+      let imageToUpload = file;
+      if (file.size > 1024 * 1024) {
+        setUploadStatus('Comprimiendo imagen...');
+        try {
+          imageToUpload = await compressImage(file);
+        } catch (error) {
+          console.error('Error compressing image:', error);
+        }
+      }
+
+      setUploadStatus('Subiendo imagen...');
+
+      // Generar nombre de archivo seguro
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(7);
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const safeFileName = `${timestamp}_${randomString}.${extension}`;
+      const filePath = `${chatId}/${safeFileName}`;
+
+      // Subir archivo al bucket correcto
+      const { data, error } = await supabase.storage
+        .from('chat_uploads')
+        .upload(filePath, imageToUpload, {
           cacheControl: '3600',
-          upsert: false,
           contentType: file.type,
+          upsert: false
         });
 
       if (error) {
-        throw error;
+        console.error('Upload error:', error);
+        throw new Error(error.message);
       }
 
-      const imageUrl = `https://your-supabase-url.storage.supabase.co/v1/${data.path}`;
+      // Obtener URL pública
+      const { data: urlData } = supabase.storage
+        .from('chat_uploads')
+        .getPublicUrl(filePath);
+
+      if (!urlData.publicUrl) {
+        throw new Error('No se pudo obtener la URL de la imagen');
+      }
+
+      // Verificar que la imagen sea accesible
+      await preloadImage(urlData.publicUrl);
 
       // Enviar mensaje con la URL de la imagen
-      onSendMessage(imageUrl);
-
-      // Eliminar mensaje temporal usando el ID
-      setLiveMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+      onSendMessage(urlData.publicUrl);
       setUploadStatus('');
 
-      // Restaurar la posición del scroll después de la carga
-      if (scrollPos && messagesContainer) {
-        messagesContainer.scrollTop = scrollPos;
-      }
-
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      alert('Error al subir la imagen. Por favor intenta de nuevo.');
       setUploadStatus('');
+      
+      // Mensajes de error más específicos
+      let errorMessage = 'No se pudo subir la imagen. Por favor intente nuevamente.';
+      if (error.message.includes('duplicate')) {
+        errorMessage = 'Ya existe una imagen con el mismo nombre. Intente nuevamente.';
+      } else if (error.message.includes('size')) {
+        errorMessage = 'La imagen es demasiado grande. Máximo 5MB.';
+      } else if (error.message.includes('permission')) {
+        errorMessage = 'Error de permisos al subir la imagen.';
+      }
+      
+      alert(errorMessage);
     }
   };
 
-  // Función para comprimir imágenes
+  // Actualizar la función de compresión de imágenes
   const compressImage = async (file: File): Promise<File> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
@@ -337,36 +386,89 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           let width = img.width;
           let height = img.height;
 
-          // Calcular nuevas dimensiones manteniendo el aspecto
-          if (width > 1200) {
-            height = (height * 1200) / width;
-            width = 1200;
+          // Mantener relación de aspecto y limitar tamaño máximo
+          const maxDimension = 1200;
+          if (width > height && width > maxDimension) {
+            height = (height * maxDimension) / width;
+            width = maxDimension;
+          } else if (height > maxDimension) {
+            width = (width * maxDimension) / height;
+            height = maxDimension;
           }
 
           canvas.width = width;
           canvas.height = height;
 
           const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
+          if (!ctx) {
+            reject(new Error('No se pudo crear el contexto del canvas'));
+            return;
+          }
 
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const newFile = new File([blob], file.name, {
-                type: 'image/jpeg',
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Usar el mismo tipo de archivo que el original si es posible
+          const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const quality = mimeType === 'image/jpeg' ? 0.8 : undefined;
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('No se pudo comprimir la imagen'));
+                return;
+              }
+              resolve(new File([blob], file.name, {
+                type: mimeType,
                 lastModified: Date.now(),
-              });
-              resolve(newFile);
-            }
-          }, 'image/jpeg', 0.8);
+              }));
+            },
+            mimeType,
+            quality
+          );
         };
+        img.onerror = () => reject(new Error('No se pudo cargar la imagen'));
         img.src = e.target?.result as string;
       };
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
       reader.readAsDataURL(file);
+    });
+  };
+
+  // Move these utility functions outside of the ChatWindow component
+  const isImageUrl = (text: string) => {
+    if (!text) return false;
+    if ((window as any).__imageUrlCache?.[text]) {
+      return (window as any).__imageUrlCache[text];
+    }
+    
+    const isImage = text.includes('storage.googleapis.com') || 
+                   text.includes('supabase.co') ||
+                   /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
+    
+    if (!(window as any).__imageUrlCache) {
+      (window as any).__imageUrlCache = {};
+    }
+    (window as any).__imageUrlCache[text] = isImage;
+    
+    return isImage;
+  };
+
+  const preloadImage = (url: string) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
     });
   };
 
   return (
     <div className="chat-window-center-container">
+      {channelError && (
+        <div className="channel-error-banner">
+          {channelError}
+        </div>
+      )}
       <div className="chat-window">
         {/* Header profesional mejorado */}
         <div className={`agent-header-pro ${getHeaderState()}`}>
@@ -446,35 +548,4 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 };
 
-// Move these utility functions outside of the ChatWindow component
-const isImageUrl = (text: string) => {
-  if (!text) return false;
-  if ((window as any).__imageUrlCache?.[text]) {
-    return (window as any).__imageUrlCache[text];
-  }
-  
-  const isImage = text.includes('storage.googleapis.com') || 
-                 text.includes('supabase.co') ||
-                 /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
-  
-  if (!(window as any).__imageUrlCache) {
-    (window as any).__imageUrlCache = {};
-  }
-  (window as any).__imageUrlCache[text] = isImage;
-  
-  return isImage;
-};
-
-const preloadImage = (url: string) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
-  });
-};
-
 export default ChatWindow;
-
-
-
