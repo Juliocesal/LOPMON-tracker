@@ -416,11 +416,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   </button>
                 </div>
               ) : (
-                <div
-                  className={`chat-input${showSobranteWaitingLoader ? ' chat-input-disabled' : ''}`}
-                  style={showSobranteWaitingLoader ? { pointerEvents: 'none', opacity: 0.6, background: '#e5e7eb' } : {}}
-                >
-                  <ChatInput onSendMessage={onSendMessage} />
+                <div className={`chat-input${showSobranteWaitingLoader ? ' chat-input-disabled' : ''}`}>
+                  <ChatInput 
+                    onSendMessage={onSendMessage}
+                    onImageUpload={handleImageUpload}
+                    isReconnecting={isReconnecting}
+                    uploadStatus={uploadStatus}
+                  />
                   {showSobranteWaitingLoader && (
                     <div className="chat-input-blocker"></div>
                   )}
