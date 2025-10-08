@@ -33,8 +33,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className="chat-input-container">
+      {/* Solo mostrar el indicador de reconexión si realmente estamos reconectando */}
       {isReconnecting && (
-        <div className="reconnecting-indicator">
+        <div className="reconnecting-indicator" style={{ 
+          padding: '4px 8px',
+          marginBottom: '8px',
+          borderRadius: '4px',
+          backgroundColor: '#fff3cd',
+          color: '#856404',
+          fontSize: '0.875rem'
+        }}>
           <span>🔄 Reconectando...</span>
         </div>
       )}

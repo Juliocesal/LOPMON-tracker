@@ -126,16 +126,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // Suscripción a cambios en Supabase
   useEffect(() => {
     let channel: RealtimeChannel;
+    let isInitialConnection = true;
 
     const setupChannel = async () => {
-      setIsReconnecting(true); // Set reconnecting only when initially connecting
+      // Solo mostrar "Reconectando" si no es la conexión inicial
+      if (!isInitialConnection) {
+        setIsReconnecting(true);
+      }
       
       channel = supabase.channel(`public:messages:${chatId}`);
 
       channel
         .on('system', { event: 'disconnect' }, () => {
           console.log('Desconexión detectada');
-          setIsReconnecting(true); // Set true only on actual disconnect
+          setIsReconnecting(true);
           handleReconnection();
         })
         .on(
@@ -147,6 +151,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             filter: `chat_id=eq.${chatId}`,
           },
           (payload: any) => {
+            // Si recibimos mensajes, estamos conectados
+            setIsReconnecting(false);
             const newMessage: ExtendedMessage = {
               role: payload.new.role,
               text: payload.new.text,
@@ -158,7 +164,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         .subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             console.log('Conectado exitosamente');
-            setIsReconnecting(false); // Clear reconnecting state on successful connection
+            setIsReconnecting(false);
+            isInitialConnection = false;
           }
         });
     };
