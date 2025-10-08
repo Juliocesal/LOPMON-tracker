@@ -1,5 +1,5 @@
 // src/pages/AgentDashboard.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient'; // Asegúrate de que la ruta sea correcta
 import { downloadConversation } from '../utils/downloadConversation'; // Agrega esta línea al inicio
 import Loading from '../components/Loading';
@@ -24,6 +24,9 @@ const AgentDashboard = () => {
   // Hook de notificaciones globales
   const { notifyNewChat, notifyNewMessage, settings } = useNotifications();
   
+  // Ref para el final de los mensajes, usado para el auto-scroll
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   // Función para calcular el tiempo transcurrido de forma más precisa
   const calculateElapsedTime = (createdAt: string) => {
     const createdDate = new Date(createdAt);
@@ -556,6 +559,16 @@ const AgentDashboard = () => {
     }
   };
 
+  // Función para hacer scroll automático al final de los mensajes
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Efecto para hacer scroll cuando cambian los mensajes
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   if (loading) {
     return <Loading message="Cargando panel de soporte..." />;
   }
@@ -760,6 +773,9 @@ const AgentDashboard = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Div para el scroll automático al final */}
+                <div ref={messagesEndRef} />
               </div>
               <div className="flex flex-col gap-2">
                 {/* Indicador de que el agente está escribiendo */}
