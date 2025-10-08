@@ -512,6 +512,50 @@ const AgentDashboard = () => {
     return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
   };
 
+  // Función para manejar la subida de imágenes
+  const handleImageUpload = async (file: File) => {
+    if (!selectedChatId) return;
+
+    try {
+      // Validar tamaño del archivo (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('El archivo es demasiado grande. Máximo 5MB permitido.');
+        return;
+      }
+
+      // Validar tipo de archivo
+      const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        alert('Solo se permiten archivos jpg, png o webp.');
+        return;
+      }
+
+      // Subir a Supabase Storage
+      const fileName = `${Date.now()}-${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('chat_uploads')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      // Obtener URL pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat_uploads')
+        .getPublicUrl(data.path);
+
+      // Enviar mensaje con la URL de la imagen
+      const { error: messageError } = await supabase.from('messages').insert([
+        { chat_id: selectedChatId, role: 'agent', text: publicUrl },
+      ]);
+
+      if (messageError) throw messageError;
+
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Error al subir la imagen. Por favor intenta de nuevo.');
+    }
+  };
+
   if (loading) {
     return <Loading message="Cargando panel de soporte..." />;
   }
@@ -726,6 +770,39 @@ const AgentDashboard = () => {
                 )}
                 
                 <div className="message-input-container">
+                  <div className="image-upload-buttons">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                      style={{ display: 'none' }}
+                      id="camera-input"
+                    />
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                      style={{ display: 'none' }}
+                      id="file-input"
+                    />
+                    <button
+                      onClick={() => document.getElementById('camera-input')?.click()}
+                      className="image-button"
+                      type="button"
+                      title="Tomar foto"
+                    >
+                      📷
+                    </button>
+                    <button
+                      onClick={() => document.getElementById('file-input')?.click()}
+                      className="image-button"
+                      type="button"
+                      title="Adjuntar imagen"
+                    >
+                      📎
+                    </button>
+                  </div>
                   <textarea
                     value={response}
                     onChange={handleInputChange}

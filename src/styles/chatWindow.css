@@ -974,14 +974,15 @@
   transition: border-color 0.3s ease;
 }
 
-/* Estilos para los botones de imagen */
-.image-upload-buttons {
+/* Messages container image buttons */
+.messages-container .image-upload-buttons {
   display: flex;
   gap: 4px;
   align-items: center;
+  margin-right: 8px;
 }
 
-.image-button {
+.messages-container .image-button {
   padding: 6px;
   background: none;
   border: none;
@@ -990,49 +991,36 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s;
+  transition: all 0.2s;
   color: #6b7280;
   border-radius: 4px;
+  width: 32px;
+  height: 32px;
 }
 
-.image-button:hover {
+.messages-container .image-button:hover {
   transform: scale(1.1);
   background-color: #f3f4f6;
+  color: #3b82f6;
 }
 
-/* Ajustar el chat input form para los botones */
-.chat-input-form {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  padding: 8px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+/* Tablet and desktop */
+@media (min-width: 768px) {
+  .messages-container .image-button {
+    padding: 8px;
+    font-size: 1.25rem;
+    width: 40px;
+    height: 40px;
+  }
 }
 
-.chat-text-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.95rem;
-  background: white;
-  transition: border-color 0.3s ease;
-  min-height: 40px;
-}
-
-/* Responsive adjustments */
+/* Ajustes responsive */
 @media (max-width: 768px) {
-  .image-button {
+  .messages-container .image-button {
     padding: 4px;
     font-size: 1rem;
-  }
-  
-  .chat-input-form {
-    padding: 6px;
-    gap: 6px;
+    width: 28px;
+    height: 28px;
   }
 }
 
