@@ -128,11 +128,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     let channel: RealtimeChannel;
 
     const setupChannel = async () => {
+      setIsReconnecting(true); // Set reconnecting only when initially connecting
+      
       channel = supabase.channel(`public:messages:${chatId}`);
 
       channel
         .on('system', { event: 'disconnect' }, () => {
           console.log('Desconexión detectada');
+          setIsReconnecting(true); // Set true only on actual disconnect
           handleReconnection();
         })
         .on(
@@ -155,7 +158,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         .subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             console.log('Conectado exitosamente');
-            setIsReconnecting(false);
+            setIsReconnecting(false); // Clear reconnecting state on successful connection
           }
         });
     };

@@ -35,7 +35,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     <div className="chat-input-container">
       {isReconnecting && (
         <div className="reconnecting-indicator">
-          Reconectando...
+          <span>🔄 Reconectando...</span>
         </div>
       )}
       <div className="chat-input-form">
