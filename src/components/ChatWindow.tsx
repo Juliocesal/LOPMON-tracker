@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 import ChatInput from './ChatInput';
-import ImageUpload from './ImageUpload';
 import { supabase } from '../utils/supabaseClient';
 import { Message } from '../hooks/types';
 import '../styles/chatWindow.css';
