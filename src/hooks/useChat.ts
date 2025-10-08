@@ -4,30 +4,20 @@ import { createChatSession, saveMessage, transferChatToAgent } from '../api/Chat
 import { Message } from '../hooks/types'; // Importamos la interfaz
 
 const useChat = () => {
-  const [messages, setMessages] = useState<Message[]>([]); // Estado de los mensajes
-  const [chatId, setChatId] = useState<string>(''); // ID del chat (inicializado como string vacío)
-  const [currentStep, setCurrentStep] = useState(0); // Paso actual del chatbot
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatId, setChatId] = useState<string>('');
+  const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
-    user: '', // Nuevo campo para el usuario
-    problemType: '', // Me falta material / Me sobra material
-    location: '', // Ubicación del tote
-    toteNo: '', // Número de tote
-    stockID: '', // Número de stock ID
-    correctionField: '', // Campo que se está corrigiendo
+    user: '',
   });
-  const [isTransferred, setIsTransferred] = useState(false); // NUEVO: bandera de transferencia
-  const initialized = useRef(false); // NUEVO: Ref para prevenir doble inicialización
+  const [isTransferred, setIsTransferred] = useState(false);
+  const initialized = useRef(false);
 
   // Función para reiniciar el estado del chat
   const resetChatState = () => {
     setCurrentStep(0);
     setFormData({
       user: '',
-      problemType: '',
-      location: '',
-      toteNo: '',
-      stockID: '',
-      correctionField: '',
     });
     setIsTransferred(false);
     localStorage.removeItem('chatCurrentStep');
@@ -68,7 +58,7 @@ const useChat = () => {
           // Primer mensaje del chatbot solo si no hay mensajes previos
           const initialMessage: Message = {
             role: 'bot',
-            text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Qué problema tienes con el tote?",
+            text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu nombre?",
           };
           await saveMessage(session.id, 'bot', initialMessage.text); // Guardar el mensaje en la tabla `messages`
           setMessages([initialMessage]);
@@ -122,7 +112,7 @@ const useChat = () => {
 
     try {
       const normalizedMessage = normalizeUserInput(message);
-      const userMessage: Message = { role: 'user', text: message }; // Mostrar el mensaje original
+      const userMessage: Message = { role: 'user', text: message };
       await saveMessage(chatId, 'user', message);
       setMessages((prev) => [...prev, userMessage]);
       console.log('[useChat] Mensaje de usuario enviado:', message);
@@ -133,235 +123,28 @@ const useChat = () => {
       let nextFormData = { ...formData };
       let botResponseText = '';
 
-      // FALTANTE (Me falta material)
-      if (formData.problemType === 'Me falta material' || (currentStep === 0 && (normalizedMessage === 'Me falta material'))) {
-        if (currentStep === 0) {
-          nextFormData.problemType = 'Me falta material';
-          nextStep = 1;
-          botResponseText = 'Vamos a registrar un FALTANTE. Por favor, responde con la siguiente información. ✅\n\nPrimero, ¿cuál es tu Usuario?';
-        } else if (currentStep === 1) {
-          nextFormData.user = message;
+      if (currentStep === 0) {
+        nextFormData.user = message;
+        nextStep = 1;
+        botResponseText = `El nombre "${message}" es correcto?`;
+      } else if (currentStep === 1) {
+        if (normalizedMessage === 'sí' || normalizedMessage === 'si') {
           nextStep = 2;
-          botResponseText = `Gracias, ${message}. Ahora dime, ¿cuál es la ubicación (locación) donde notaste el faltante?`;
-        } else if (currentStep === 2) {
-          nextFormData.location = message;
-          nextStep = 3;
-          botResponseText = `La ubicación (${message}) está correctamente escrita?`;
-        } else if (currentStep === 3) {
-          if (normalizedMessage === 'no') {
-            nextStep = 2;
-            botResponseText = 'Por favor, indícame de nuevo la ubicación.';
-          } else if (normalizedMessage === 'sí') {
-            nextStep = 4;
-            botResponseText = 'Perfecto. Ahora dime, ¿cuál es el Stock ID del material que hace falta?';
-          } else {
-            nextStep = 3;
-            botResponseText = `La ubicación (${nextFormData.location}) está correctamente escrita?`;
-          }
-        } else if (currentStep === 4) {
-          nextFormData.stockID = message;
-          nextStep = 5;
-          botResponseText = `El Stock ID (${message}) es correcto?`;
-        } else if (currentStep === 5) {
-          if (normalizedMessage === 'no') {
-            nextStep = 4;
-            botResponseText = 'Por favor, indícame de nuevo el Stock ID del faltante.';
-          } else if (normalizedMessage === 'sí') {
-            nextStep = 6;
-            botResponseText = 'Finalmente, ¿cuál es el número de TOTE relacionado con este faltante?';
-          } else {
-            nextStep = 5;
-            botResponseText = `El Stock ID (${nextFormData.stockID}) es correcto?`;
-          }
-        } else if (currentStep === 6) {
-          nextFormData.toteNo = message;
-          nextStep = 7;
-          botResponseText = `El tote (${message}) es correcto?`;
-        } else if (currentStep === 7) {
-          if (normalizedMessage === 'no') {
-            nextStep = 6;
-            botResponseText = 'Por favor, indícame de nuevo el número de TOTE.';
-          } else if (normalizedMessage === 'sí') {
-            nextStep = 9; // Pasar directamente al step de confirmación
-            botResponseText = `¡Gracias! Aquí está el resumen de tu reporte de FALTANTE:\n\n👤 Usuario: ${nextFormData.user}\n📍 Ubicación: ${nextFormData.location}\n🔢 Stock ID: ${nextFormData.stockID}\n📦 Tote: ${nextFormData.toteNo}`;
-            
-            // Enviar automáticamente la pregunta de confirmación después del resumen
-            setTimeout(async () => {
-              const confirmationMessage: Message = {
-                role: 'bot',
-                text: '¿Los datos del reporte están correctos?',
-              };
-              await saveMessage(chatId, 'bot', confirmationMessage.text);
-              setMessages((prev) => [...prev, confirmationMessage]);
-            }, 500); // Reducido a 500ms para que aparezca más rápido
-          } else {
-            nextStep = 7;
-            botResponseText = `El tote (${nextFormData.toteNo}) es correcto?`;
-          }
-        } else if (currentStep === 9) {
-          if (normalizedMessage === 'sí') {
-            nextStep = 12;
-            botResponseText = 'Perfecto. Tu reporte ha sido registrado y transferido a un agente. Por favor, espera mientras se conecta un agente para ayudarte.';
-          } else if (normalizedMessage === 'no') {
-            nextStep = 10;
-            botResponseText = '¿Qué campo necesitas corregir?';
-          } else {
-            nextStep = 9;
-            botResponseText = '¿Los datos del reporte están correctos?';
-          }
-        } else if (currentStep === 10) {
-          // Usuario selecciona qué campo corregir
-          nextFormData.correctionField = message;
-          nextStep = 11;
-          if (message === 'Usuario') {
-            botResponseText = 'Por favor, ingresa el usuario correcto:';
-          } else if (message === 'Ubicación') {
-            botResponseText = 'Por favor, ingresa la ubicación correcta:';
-          } else if (message === 'Stock ID') {
-            botResponseText = 'Por favor, ingresa el Stock ID correcto:';
-          } else if (message === 'Tote') {
-            botResponseText = 'Por favor, ingresa el número de tote correcto:';
-          } else {
-            nextStep = 10;
-            botResponseText = '¿Qué campo necesitas corregir?';
-          }
-        } else if (currentStep === 11) {
-          // Usuario corrige el campo seleccionado
-          if (nextFormData.correctionField === 'Usuario') {
-            nextFormData.user = message;
-          } else if (nextFormData.correctionField === 'Ubicación') {
-            nextFormData.location = message;
-          } else if (nextFormData.correctionField === 'Stock ID') {
-            nextFormData.stockID = message;
-          } else if (nextFormData.correctionField === 'Tote') {
-            nextFormData.toteNo = message;
-          }
-          nextStep = 9; // Pasar directamente al step de confirmación
-          botResponseText = `¡Gracias! Aquí está el resumen actualizado de tu reporte de FALTANTE:\n\n👤 Usuario: ${nextFormData.user}\n📍 Ubicación: ${nextFormData.location}\n🔢 Stock ID: ${nextFormData.stockID}\n📦 Tote: ${nextFormData.toteNo}`;
+          botResponseText = 'Perfecto. Un agente se conectará en breve para ayudarte.';
           
-          // Enviar automáticamente la pregunta de confirmación después del resumen actualizado
+          // Transferir el chat inmediatamente después de confirmar el nombre
           setTimeout(async () => {
-            const confirmationMessage: Message = {
-              role: 'bot',
-              text: '¿Los datos del reporte están correctos?',
-            };
-            await saveMessage(chatId, 'bot', confirmationMessage.text);
-            setMessages((prev) => [...prev, confirmationMessage]);
+            await transferChatToAgent(chatId);
+            setIsTransferred(true);
           }, 500);
-        } else if (currentStep === 12) {
-          nextStep = 12;
-          botResponseText = 'Tu reporte está siendo procesado. Un agente se conectará pronto.';
+        } else if (normalizedMessage === 'no') {
+          nextStep = 0;
+          botResponseText = 'Por favor, ingresa tu nombre nuevamente:';
+        } else {
+          botResponseText = 'Por favor responde "Sí" o "No". ¿El nombre es correcto?';
         }
-      }
-      // SOBRANTE (Me sobra material)
-      else if (formData.problemType === 'Me sobro material' || (currentStep === 0 && (normalizedMessage === 'Me sobro material'))) {
-        if (currentStep === 0) {
-          nextFormData.problemType = 'Me sobro material';
-          nextStep = 20;
-          botResponseText = 'Veo que quieres reportar un SOBRANTE. Vamos a registrar la información necesaria. ✅\n\nPrimero, ¿puedes darme tu usuario?';
-        } else if (currentStep === 20) {
-          nextFormData.user = message;
-          nextStep = 21;
-          botResponseText = `Gracias, ${message}. Ahora dime, ¿cuál es el número de TOTE donde encontraste el sobrante?`;
-        } else if (currentStep === 21) {
-          nextFormData.toteNo = message;
-          nextStep = 22;
-          botResponseText = `El número de tote (${message}) es correcto?`;
-        } else if (currentStep === 22) {
-          if (normalizedMessage === 'no') {
-            nextStep = 21;
-            botResponseText = 'Por favor, indícame de nuevo el número de tote.';
-          } else if (normalizedMessage === 'sí') {
-            nextStep = 23;
-            botResponseText = 'Perfecto. Ahora, por favor dime el Stock ID del material que está sobrando.';
-          } else {
-            nextStep = 22;
-            botResponseText = `El número de tote (${nextFormData.toteNo}) es correcto?`;
-          }
-        } else if (currentStep === 23) {
-          nextFormData.stockID = message;
-          nextStep = 24;
-          botResponseText = `El Stock ID (${message}) es correcto?`;
-        } else if (currentStep === 24) {
-          if (normalizedMessage === 'no') {
-            nextStep = 23;
-            botResponseText = 'Por favor, indícame de nuevo el Stock ID del sobrante.';
-          } else if (normalizedMessage === 'sí') {
-            nextStep = 26; // Pasar directamente al step de confirmación
-            botResponseText = `¡Gracias! Aquí está el resumen de tu reporte de SOBRANTE:\n\n👤 Usuario: ${nextFormData.user}\n📦 Tote: ${nextFormData.toteNo}\n🔢 Stock ID: ${nextFormData.stockID}`;
-            
-            // Enviar automáticamente la pregunta de confirmación después del resumen
-            setTimeout(async () => {
-              const confirmationMessage: Message = {
-                role: 'bot',
-                text: '¿Los datos del reporte están correctos?',
-              };
-              await saveMessage(chatId, 'bot', confirmationMessage.text);
-              setMessages((prev) => [...prev, confirmationMessage]);
-            }, 500);
-          } else {
-            nextStep = 24;
-            botResponseText = `El Stock ID (${nextFormData.stockID}) es correcto?`;
-          }
-        } else if (currentStep === 26) {
-          if (normalizedMessage === 'sí') {
-            nextStep = 29;
-            botResponseText = 'Perfecto. Tu reporte ha sido registrado y transferido a un agente. Por favor, espera mientras se conecta un agente para ayudarte.';
-          } else if (normalizedMessage === 'no') {
-            nextStep = 27;
-            botResponseText = '¿Qué campo necesitas corregir?';
-          } else {
-            nextStep = 26;
-            botResponseText = '¿Los datos del reporte están correctos?';
-          }
-        } else if (currentStep === 27) {
-          // Usuario selecciona qué campo corregir
-          nextFormData.correctionField = message;
-          nextStep = 28;
-          if (message === 'Usuario') {
-            botResponseText = 'Por favor, ingresa el usuario correcto:';
-          } else if (message === 'Tote') {
-            botResponseText = 'Por favor, ingresa el número de tote correcto:';
-          } else if (message === 'Stock ID') {
-            botResponseText = 'Por favor, ingresa el Stock ID correcto:';
-          } else {
-            nextStep = 27;
-            botResponseText = '¿Qué campo necesitas corregir?';
-          }
-        } else if (currentStep === 28) {
-          // Usuario corrige el campo seleccionado
-          if (nextFormData.correctionField === 'Usuario') {
-            nextFormData.user = message;
-          } else if (nextFormData.correctionField === 'Tote') {
-            nextFormData.toteNo = message;
-          } else if (nextFormData.correctionField === 'Stock ID') {
-            nextFormData.stockID = message;
-          }
-          nextStep = 26; // Pasar directamente al step de confirmación
-          botResponseText = `¡Gracias! Aquí está el resumen actualizado de tu reporte de SOBRANTE:\n\n👤 Usuario: ${nextFormData.user}\n📦 Tote: ${nextFormData.toteNo}\n🔢 Stock ID: ${nextFormData.stockID}`;
-          
-          // Enviar automáticamente la pregunta de confirmación después del resumen actualizado
-          setTimeout(async () => {
-            const confirmationMessage: Message = {
-              role: 'bot',
-              text: '¿Los datos del reporte están correctos?',
-            };
-            await saveMessage(chatId, 'bot', confirmationMessage.text);
-            setMessages((prev) => [...prev, confirmationMessage]);
-          }, 500);
-        } else if (currentStep === 29) {
-          nextStep = 29;
-          botResponseText = 'Tu reporte está siendo procesado. Un agente se conectará pronto.';
-        }
-      } else {
-        // Default fallback para otros casos
-        switch (nextStep) {
-          case 0:
-            botResponseText = "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Qué problema tienes con el tote?";
-            break;
-          default:
-            botResponseText = "Lo siento, no entiendo tu solicitud. Por favor, selecciona una de las opciones disponibles.";
-        }
+      } else if (currentStep === 2) {
+        botResponseText = 'Un agente se conectará contigo en breve.';
       }
 
       setCurrentStep(nextStep);
@@ -373,7 +156,7 @@ const useChat = () => {
       console.log('[useChat] Mensaje del bot enviado:', botMessage.text);
 
       // Transferir el chat al soporte humano si es necesario
-      if (nextStep === 12 || nextStep === 29) {
+      if (nextStep === 2) {
         await transferChatToAgent(chatId);
         setIsTransferred(true);
         console.log('[useChat] Chat transferido a agente para chatId:', chatId);

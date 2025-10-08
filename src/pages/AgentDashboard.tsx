@@ -506,6 +506,12 @@ const AgentDashboard = () => {
     fetchClosedChats();
   }, []);
 
+  // Función para detectar URLs de imágenes
+  const isImageUrl = (text: string) => {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+    return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
+  };
+
   if (loading) {
     return <Loading message="Cargando panel de soporte..." />;
   }
@@ -682,7 +688,18 @@ const AgentDashboard = () => {
                         : 'bot-message'
                     }`}
                   >
-                    <strong>{msg.role}:</strong> {msg.text}
+                    <strong>{msg.role}:</strong>{' '}
+                    {isImageUrl(msg.text) ? (
+                      <img 
+                        src={msg.text} 
+                        alt="Imagen compartida" 
+                        className="chat-image"
+                        loading="lazy"
+                        onClick={() => window.open(msg.text, '_blank')}
+                      />
+                    ) : (
+                      msg.text
+                    )}
                   </div>
                 ))}
                 

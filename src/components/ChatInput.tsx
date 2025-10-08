@@ -1,5 +1,6 @@
 // src/components/ChatInput.tsx
 import { useState } from 'react';
+import ImageUpload from './ImageUpload';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -43,20 +44,24 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, options }) => {
 
   // Si no hay opciones, muestra un campo de texto
   return (
-    <div className="flex">
+    <div className="chat-input-form">
+      <ImageUpload onImageUploaded={onSendMessage} />
       <input
         type="text"
         value={input}
-        onChange={(e) => setInput(e.target.value)} // Actualizar el estado del input
-        onKeyDown={handleKeyDown} // Detectar el evento de teclado
-        className="flex-1 p-2 border rounded-l-lg focus:outline-none"
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className="chat-text-input"
         placeholder="Escribe un mensaje..."
       />
       <button
-        onClick={handleSendMessage} // Enviar el mensaje al hacer clic
-        className="p-2 bg-blue-500 text-white rounded-r-lg"
+        onClick={handleSendMessage}
+        disabled={!input.trim()}
+        className="send-button"
       >
-        Enviar
+        <svg width="20" height="20" viewBox="10 0 10 20" fill="none">
+                      <path d="M3 17L17 10L3 3V8L13 10L3 12V17Z" fill="currentColor"/>
+                    </svg>
       </button>
     </div>
   );

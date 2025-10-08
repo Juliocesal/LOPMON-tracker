@@ -77,35 +77,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     ? liveMessages.filter(m => m.role === 'bot').slice(-1)[0]?.text
     : '';
 
-  const showTypeOptions =
-    lastBotMessage &&
-    (
-      lastBotMessage.includes('¿Qué problema tienes con el tote?') ||
-      lastBotMessage.includes('Por favor, selecciona el tipo de problema')
-    );
-
   const showYesNoOptions =
-    lastBotMessage &&
-    (
-      lastBotMessage.includes('está correctamente escrita?') ||
-      lastBotMessage.includes('es correcto?') ||
-      lastBotMessage.includes('¿Los datos del reporte están correctos?')
-    );
+    lastBotMessage && lastBotMessage.includes('es correcto?');
 
-  const showFaltanteCorrectionOptions =
-    lastBotMessage &&
-    lastBotMessage.includes('¿Qué campo necesitas corregir?') &&
-    liveMessages.some(msg => msg.text.includes('reporte de FALTANTE'));
-
-  const showSobranteCorrectionOptions =
-    lastBotMessage &&
-    lastBotMessage.includes('¿Qué campo necesitas corregir?') &&
-    liveMessages.some(msg => msg.text.includes('reporte de SOBRANTE'));
+  // Eliminar las otras opciones que ya no necesitamos
+  const showTypeOptions = false;
+  const showFaltanteCorrectionOptions = false;
+  const showSobranteCorrectionOptions = false;
 
   const showSobranteWaitingLoader = liveMessages.some(
     (msg) =>
       msg.role === 'bot' &&
-      msg.text.includes('Perfecto. Tu reporte ha sido registrado y transferido a un agente. Por favor, espera mientras se conecta un agente para ayudarte.') &&
+      (msg.text.includes('Perfecto. Un agente se conectará en breve para ayudarte.') ||
+       msg.text.includes('Un agente se conectará contigo en breve.')) &&
       !agentConnected
   );
 
@@ -174,6 +158,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     );
   };
 
+  const isImageUrl = (text: string) => {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+    return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
+  };
+
   return (
     <div className="chat-window-center-container">
       <div className="chat-window">
@@ -193,7 +182,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               {liveMessages.map((msg, index) => {
                 const isTransferMessage =
                   msg.role === 'bot' &&
-                  msg.text.includes('Perfecto. Tu reporte ha sido registrado y transferido a un agente. Por favor, espera mientras se conecta un agente para ayudarte.');
+                  (msg.text.includes('Perfecto. Un agente se conectará en breve para ayudarte.') ||
+                   msg.text.includes('Un agente se conectará contigo en breve.'));
                 return (
                   <div key={index}>
                     <div
@@ -202,7 +192,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                       <strong>
                         {msg.role === 'user' ? 'Usuario' : msg.role === 'agent' ? 'Agente' : 'Bot'}
                       </strong>
-                      <span>{msg.text}</span>
+                      {isImageUrl(msg.text) ? (
+                        <img src={msg.text} alt="Imagen compartida" loading="lazy" />
+                      ) : (
+                        <span>{msg.text}</span>
+                      )}
                     </div>
                     {/* Loader justo después del mensaje de transferencia */}
                     {isTransferMessage && !agentConnected && (
@@ -238,26 +232,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           ) : (
             <>
-              {showTypeOptions ? (
-                <div className="options-container">
-                  <button
-                    className="option-button blue"
-                    onClick={() => handleOptionClick('Me falta material')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Me falta material
-                  </button>
-                  <button
-                    className="option-button green"
-                    onClick={() => handleOptionClick('Me sobro material')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Me sobro material
-                  </button>
-                </div>
-              ) : showYesNoOptions ? (
+              {showYesNoOptions ? (
                 <div className="options-container">
                   <button
                     className="option-button blue"
@@ -274,68 +249,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
                   >
                     No
-                  </button>
-                </div>
-              ) : showFaltanteCorrectionOptions ? (
-                <div className="options-container">
-                  <button
-                    className="option-button blue"
-                    onClick={() => handleOptionClick('Usuario')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Usuario
-                  </button>
-                  <button
-                    className="option-button green"
-                    onClick={() => handleOptionClick('Ubicación')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Ubicación
-                  </button>
-                  <button
-                    className="option-button orange"
-                    onClick={() => handleOptionClick('Stock ID')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Stock ID
-                  </button>
-                  <button
-                    className="option-button purple"
-                    onClick={() => handleOptionClick('Tote')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Tote
-                  </button>
-                </div>
-              ) : showSobranteCorrectionOptions ? (
-                <div className="options-container">
-                  <button
-                    className="option-button blue"
-                    onClick={() => handleOptionClick('Usuario')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Usuario
-                  </button>
-                  <button
-                    className="option-button green"
-                    onClick={() => handleOptionClick('Tote')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Tote
-                  </button>
-                  <button
-                    className="option-button orange"
-                    onClick={() => handleOptionClick('Stock ID')}
-                    disabled={showSobranteWaitingLoader}
-                    style={showSobranteWaitingLoader ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                  >
-                    Stock ID
                   </button>
                 </div>
               ) : (
@@ -358,3 +271,4 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 };
 
 export default ChatWindow;
+
