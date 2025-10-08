@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { RealtimeChannel, AuthChangeEvent } from '@supabase/supabase-js';
 import ChatInput from './ChatInput';
 import { supabase } from '../utils/supabaseClient';
 import type { Message } from '../hooks/types';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import '../styles/chatWindow.css';
 
 // Utility functions moved to top
@@ -116,13 +116,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const channelRef = useRef<RealtimeChannel | null>(null);
   const endOfMessagesRef = useRef<HTMLDivElement | null>(null);
-  const reconnectionAttempts = useRef<number>(0);
-  const reconnectIntervalRef = useRef<number | undefined>(undefined);
-  const lastReconnectAttemptRef = useRef<number>(Date.now());
+  const reconnectionAttempts = useRef(0);
   const maxReconnectionAttempts = 3;
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [channelError, setChannelError] = useState<string | null>(null);
-  const MIN_RECONNECT_DELAY = 5000; // 5 segundos entre intentos
 
   // Inicializar con mensajes recibidos
   useEffect(() => {
@@ -150,63 +147,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setupChannel();
   };
 
-  // Función para guardar el estado de la sesión
-  const saveSessionState = () => {
-    if (chatId) {
-      localStorage.setItem('chatSession', JSON.stringify({
-        chatId,
-        messages: liveMessages,
-        lastUpdate: Date.now()
-      }));
-    }
-  };
-
-  // Cargar sesión guardada al iniciar
-  useEffect(() => {
-    const savedSession = localStorage.getItem('chatSession');
-    if (savedSession) {
-      try {
-        const { messages, lastUpdate } = JSON.parse(savedSession);
-        // Solo restaurar si la sesión no es muy antigua (24 horas)
-        if (Date.now() - lastUpdate < 24 * 60 * 60 * 1000) {
-          setLiveMessages(messages);
-        } else {
-          localStorage.removeItem('chatSession');
-        }
-      } catch (error) {
-        console.error('Error al restaurar la sesión:', error);
-        localStorage.removeItem('chatSession');
-      }
-    }
-  }, []);
-
-  // Guardar sesión al actualizar mensajes
-  useEffect(() => {
-    saveSessionState();
-  }, [liveMessages]);
-
-  // Configurar listener de auth
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
-      if (event === 'SIGNED_OUT') {
-        // Limpiar estado local
-        localStorage.removeItem('chatSession');
-        setLiveMessages([]);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
   // Configurar el canal de Supabase
   const setupChannel = () => {
     try {
       if (channelRef.current) {
-        channelRef.current.unsubscribe();
+        return; // Prevenir suscripciones múltiples
       }
 
       const channel = supabase.channel(`public:messages:${chatId}`);
@@ -236,38 +181,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             setIsReconnecting(false);
             setChannelError(null);
             reconnectionAttempts.current = 0;
-            lastReconnectAttemptRef.current = Date.now();
           } else if (status === 'CHANNEL_ERROR') {
-            const now = Date.now();
-            if (now - lastReconnectAttemptRef.current >= MIN_RECONNECT_DELAY) {
-              handleReconnection();
-              lastReconnectAttemptRef.current = now;
-            }
+            setTimeout(handleReconnection, 1000);
           }
         });
-
-      // Configurar intervalo de reconexión
-      if (!reconnectIntervalRef.current) {
-        reconnectIntervalRef.current = window.setInterval(() => {
-         if ((channelRef.current?.state as string) !== 'real-time:subscribed') {
-  handleReconnection();
-}
-        }, 30000); // Intentar cada 30 segundos
-      }
     } catch (error) {
       console.error('Error al configurar el canal:', error);
       setChannelError('Error de conexión');
     }
   };
 
-  // Limpiar intervalo al desmontar
+  // Suscripción a cambios en Supabase
   useEffect(() => {
+    setupChannel();
+
     return () => {
-      if (reconnectIntervalRef.current) {
-        clearInterval(reconnectIntervalRef.current);
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
       }
     };
-  }, []);
+  }, [chatId]);
 
   // Scroll automático al último mensaje
   useEffect(() => {
