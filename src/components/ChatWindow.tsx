@@ -328,7 +328,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       const filePath = `${chatId}/${safeFileName}`;
 
       // Subir archivo al bucket correcto
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('chat_uploads')
         .upload(filePath, imageToUpload, {
           cacheControl: '3600',
@@ -431,34 +431,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       };
       reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
       reader.readAsDataURL(file);
-    });
-  };
-
-  // Move these utility functions outside of the ChatWindow component
-  const isImageUrl = (text: string) => {
-    if (!text) return false;
-    if ((window as any).__imageUrlCache?.[text]) {
-      return (window as any).__imageUrlCache[text];
-    }
-    
-    const isImage = text.includes('storage.googleapis.com') || 
-                   text.includes('supabase.co') ||
-                   /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
-    
-    if (!(window as any).__imageUrlCache) {
-      (window as any).__imageUrlCache = {};
-    }
-    (window as any).__imageUrlCache[text] = isImage;
-    
-    return isImage;
-  };
-
-  const preloadImage = (url: string) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = url;
     });
   };
 
