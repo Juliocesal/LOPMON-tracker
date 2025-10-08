@@ -569,6 +569,23 @@ const AgentDashboard = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Add this function after other handler functions
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    if (!selectedChatId) return;
+
+    const items = e.clipboardData.items;
+    
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault(); // Prevent default paste of image as string
+        const file = item.getAsFile();
+        if (file) {
+          await handleImageUpload(file);
+        }
+      }
+    }
+  };
+
   if (loading) {
     return <Loading message="Cargando panel de soporte..." />;
   }
@@ -822,6 +839,7 @@ const AgentDashboard = () => {
                   <textarea
                     value={response}
                     onChange={handleInputChange}
+                    onPaste={handlePaste}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -829,7 +847,7 @@ const AgentDashboard = () => {
                       }
                     }}
                     className="message-input"
-                    placeholder="Escribe tu respuesta..."
+                    placeholder="Escribe tu respuesta o pega una imagen (Ctrl+V)..."
                   />
                   <button
                     onClick={handleSendMessage}
