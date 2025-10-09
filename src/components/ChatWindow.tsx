@@ -188,7 +188,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // Función para manejar la reconexión
   const handleReconnection = useCallback(async () => {
     if (reconnectionAttempts.current >= maxReconnectionAttempts) {
-      setChannelError('Conexión perdida. Por favor, recarga la página.');
+      setChannelError('Conexión perdida. Por favor, espera un momento.');
       return;
     }
 
@@ -556,13 +556,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       {channelError && (
         <div className="channel-error-banner">
           {channelError}
-          <button 
-            onClick={() => window.location.reload()} 
-            className="reload-button"
-            style={{ marginLeft: '10px', padding: '5px 10px' }}
-          >
-            Recargar
-          </button>
         </div>
       )}
       <div className="chat-window">
