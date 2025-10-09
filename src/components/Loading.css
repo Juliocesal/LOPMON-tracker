@@ -30,6 +30,19 @@
   margin: 0;
 }
 
+/* Style override for chat list loading */
+.chat-list-container .loading-container {
+  min-height: 200px;
+  height: calc(80vh - 70px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-list-container .loading-spinner {
+  transform: scale(0.8);
+}
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
