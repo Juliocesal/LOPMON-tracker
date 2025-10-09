@@ -203,7 +203,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setupChannel();
   }, [maxReconnectionAttempts]);
 
-  // Añadir función para verificar estado del chat
+  // Modificar la función checkChatStatus para incluir ambos estados
   const checkChatStatus = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -214,8 +214,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       if (error) throw error;
       
-      if (data?.status === 'closed') {
+      // Verificar si el estado es closed o resolved
+      if (data?.status === 'closed' || data?.status === 'resolved') {
         localStorage.setItem(`chat_closed_${chatId}`, 'true');
+        localStorage.setItem(`chat_status_${chatId}`, data.status);
         window.dispatchEvent(new Event('storage'));
       }
     } catch (error) {
@@ -274,8 +276,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           filter: `id=eq.${chatId}`,
         },
         (payload: any) => {
-          if (payload.new && payload.new.status === 'closed') {
+          if (payload.new && (payload.new.status === 'closed' || payload.new.status === 'resolved')) {
             localStorage.setItem(`chat_closed_${chatId}`, 'true');
+            localStorage.setItem(`chat_status_${chatId}`, payload.new.status);
             window.dispatchEvent(new Event('storage'));
           }
         }
@@ -613,8 +616,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Modificar isActuallyClosed para que sea más robusto
   const isActuallyClosed = useMemo(() => {
-    return isChatClosed || localStorage.getItem(`chat_closed_${chatId}`) === 'true';
+    return isChatClosed || 
+           localStorage.getItem(`chat_closed_${chatId}`) === 'true' || 
+           localStorage.getItem(`chat_status_${chatId}`) === 'resolved';
   }, [isChatClosed, chatId]);
+
+  // Modificar el mensaje mostrado según el estado
+  const getClosedMessage = useCallback(() => {
+    const status = localStorage.getItem(`chat_status_${chatId}`);
+    return status === 'resolved' 
+      ? '🔒 Este chat ha sido resuelto y cerrado.'
+      : '🔒 Este chat ha sido cerrado por el agente.';
+  }, [chatId]);
 
   const headerState = getHeaderState();
 
@@ -658,7 +671,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           isActuallyClosed ? (
             <div className="options-container" style={{ flexDirection: 'column', alignItems: 'center' }}>
               <div className="chat-closed-notification">
-                🔒 Este chat ha sido cerrado por el agente.
+                {getClosedMessage()}
               </div>
               <button
                 onClick={() => onNewChat ? onNewChat() : window.location.reload()}
