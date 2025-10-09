@@ -130,7 +130,7 @@ const useChat = () => {
       } else if (currentStep === 1) {
         if (normalizedMessage === 'sí' || normalizedMessage === 'si') {
           nextStep = 2;
-          botResponseText = 'Perfecto. Un agente se conectará en breve para ayudarte.';
+          botResponseText = 'Perfecto. Un Exception se conectará en breve para ayudarte.';
           
           // Transferir el chat inmediatamente después de confirmar el nombre
           setTimeout(async () => {
@@ -144,7 +144,7 @@ const useChat = () => {
           botResponseText = 'Por favor responde "Sí" o "No". ¿El nombre es correcto?';
         }
       } else if (currentStep === 2) {
-        botResponseText = 'Un agente se conectará contigo en breve.';
+        botResponseText = 'Un Exception se conectará contigo en breve.';
       }
 
       setCurrentStep(nextStep);

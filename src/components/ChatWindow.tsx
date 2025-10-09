@@ -320,8 +320,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const showSobranteWaitingLoader = liveMessages.some(
     (msg) =>
       msg.role === 'bot' &&
-      (msg.text.includes('Perfecto. Un exception se conectará en breve para ayudarte.') ||
-       msg.text.includes('Un exception se conectará contigo en breve.')) &&
+      (msg.text.includes('Perfecto. Un Exception se conectará en breve para ayudarte.') ||
+       msg.text.includes('Un Exception se conectará contigo en breve.')) &&
       !agentConnected
   );
   
@@ -379,7 +379,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         <div className="header-text">
           {state === 'loading' && <><div className="header-title">Iniciando Sesión</div><div className="header-subtitle">Cargando interfaz de chat...</div></>}
           {state === 'connected' && <><div className="header-title">Agente Conectado</div><div className="header-subtitle">{agentName} • En línea</div></>}
-          {state === 'waiting' && <><div className="header-title">Conectando Exception</div><div className="header-subtitle">Un exception se unirá en breve...</div></>}
+          {state === 'waiting' && <><div className="header-title">Conectando Exception</div><div className="header-subtitle">Un Exception se unirá en breve...</div></>}
           {state === 'closed' && <><div className="header-title">Sesión Finalizada</div><div className="header-subtitle">El chat ha sido cerrado por el agente</div></>}
           {state === 'processing' && <><div className="header-title">Asistente Virtual</div><div className="header-subtitle">Procesando su consulta...</div></>}
         </div>
