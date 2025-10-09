@@ -941,7 +941,7 @@ const AgentDashboard = () => {
                       .toLowerCase()
                       .includes(search.toLowerCase());
                   })
-                  .sort((a, b) => {
+                  .sort((b, a) => {
                     // Ordena por ticket_id si existe, sino por chat.id
                     const aVal = a.ticket_id ? Number(a.ticket_id) : a.id;
                     const bVal = b.ticket_id ? Number(b.ticket_id) : b.id;
