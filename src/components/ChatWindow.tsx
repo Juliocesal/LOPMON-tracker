@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatInput from './ChatInput';
 import { supabase } from '../utils/supabaseClient';
 import type { Message } from '../hooks/types';
-import { RealtimeChannel, REALTIME_SUBSCRIBE_STATES } from '@supabase/supabase-js';  
+import { RealtimeChannel, REALTIME_CHANNEL_STATES, REALTIME_SUBSCRIBE_STATES } from '@supabase/supabase-js';  
 import '../styles/chatWindow.css';
 import ImageViewerModal from './ImageViewerModal';
 import '../styles/imageViewer.css';
@@ -142,6 +142,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const maxReconnectionAttempts = 3;
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [channelError, setChannelError] = useState<string | null>(null);
+  const reconnectIntervalRef = useRef<number | null>(null);
   const sessionKey = `chat_session_${chatId}`;
 
   // Guardar estado del chat en localStorage
@@ -204,17 +205,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const setupChannel = useCallback(() => {
     try {
+      // Desuscribirse del canal previo si existe
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
 
+      // Crear canal nuevo
       const channel = supabase.channel(`public:messages:${chatId}`, {
         config: { broadcast: { self: true } },
       });
       channelRef.current = channel;
 
-      // Suscripción a cambios en la tabla messages
+      // Escuchar cambios en la tabla 'messages'
       channel.on(
         'postgres_changes',
         {
@@ -231,6 +234,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               id: payload.new.id,
             };
             setLiveMessages((prev) => {
+              // Evitar duplicados
               if (prev.some(msg => msg.id === newMessage.id)) {
                 return prev;
               }
@@ -240,36 +244,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       );
 
-      // Nueva suscripción a cambios en la tabla chats
-      channel.on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'chats',
-          filter: `id=eq.${chatId}`,
-        },
-        (payload: any) => {
-          if (payload.new && payload.new.status === 'closed') {
-            setLiveMessages(prev => [...prev]);
-            // Forzar actualización del estado local
-            localStorage.setItem(`chat_closed_${chatId}`, 'true');
-            window.dispatchEvent(new Event('storage'));
-          }
-        }
-      );
-
+      // Suscribirse y manejar estado del canal
       channel.subscribe((status) => {
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
           setIsReconnecting(false);
           setChannelError(null);
           reconnectionAttempts.current = 0;
-          
-          // Verificar estado del chat al reconectar
-          const isClosed = localStorage.getItem(`chat_closed_${chatId}`);
-          if (isClosed === 'true') {
-            persistChatState();
-          }
         } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
           handleReconnection();
         }
@@ -279,26 +259,28 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.error('Error al configurar el canal:', error);
       setChannelError('Error de conexión');
     }
-  }, [chatId, handleReconnection, persistChatState]);
+  }, [chatId, handleReconnection]);
 
-  // Agregar efecto para manejar el estado closed
+  // Configurar intervalo de reconexión
   useEffect(() => {
-    if (isChatClosed) {
-      localStorage.setItem(`chat_closed_${chatId}`, 'true');
-    }
-    
-    const handleStorageChange = () => {
-      const isClosed = localStorage.getItem(`chat_closed_${chatId}`);
-      if (isClosed === 'true') {
-        setLiveMessages(prev => [...prev]); // Forzar re-render
+    const setupReconnection = () => {
+      reconnectIntervalRef.current = window.setInterval(() => {
+        if (!channelRef.current || channelRef.current.state !== REALTIME_CHANNEL_STATES.joined) {
+          console.log('Attempting to reconnect channel...');
+          setupChannel();
+        }
+      }, 30000);
+    };
+
+    setupReconnection();
+
+    return () => {
+      if (reconnectIntervalRef.current) {
+        clearInterval(reconnectIntervalRef.current);
+        reconnectIntervalRef.current = null;
       }
     };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [chatId, isChatClosed]);
+  }, [setupChannel]);
 
   // Inicializar canal y mensajes
   useEffect(() => {
@@ -569,9 +551,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const headerState = getHeaderState();
 
-  // Modificar la lógica de renderizado para verificar también el estado en localStorage
-  const isActuallyClosed = isChatClosed || localStorage.getItem(`chat_closed_${chatId}`) === 'true';
-
   return (
     <div className="chat-window-center-container">
       {channelError && (
@@ -609,7 +588,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
         {/* SOLO mostrar notificación y botón aquí abajo */}
         {!loading && (
-          isActuallyClosed ? (
+          isChatClosed ? (
             <div className="options-container" style={{ flexDirection: 'column', alignItems: 'center' }}>
               <div className="chat-closed-notification">
                 🔒 Este chat ha sido cerrado por el agente.
