@@ -5,6 +5,8 @@ import { downloadConversation } from '../utils/downloadConversation'; // Agrega 
 import Loading from '../components/Loading';
 import { useNotifications } from '../contexts/NotificationContext';
 import NotificationSettings from '../components/NotificationSettings';
+import ImageViewerModal from '../components/ImageViewerModal';
+import '../styles/imageViewer.css';
 import './AgentDashboard.css'; // Asegúrate de que la ruta sea correcta
 const AgentDashboard = () => {
   const [activeChats, setActiveChats] = useState<any[]>([]); // Lista de chats activos
@@ -20,6 +22,9 @@ const AgentDashboard = () => {
   const [closedChats, setClosedChats] = useState<any[]>([]); // Nuevo estado para chats cerrados
   const [closedChatSearch, setClosedChatSearch] = useState(''); // Estado para el buscador
   const [closedSortAsc, setClosedSortAsc] = useState(true); // Estado para el orden
+  const [viewerImages, setViewerImages] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
   
   // Hook de notificaciones globales
   const { notifyNewChat, notifyNewMessage, settings } = useNotifications();
@@ -586,6 +591,16 @@ const AgentDashboard = () => {
     }
   };
 
+  const handleImageClick = (clickedImage: string) => {
+    const images = messages
+      .filter(msg => isImageUrl(msg.text))
+      .map(msg => msg.text);
+    const index = images.indexOf(clickedImage);
+    setViewerImages(images);
+    setCurrentImageIndex(index);
+    setIsImageViewerOpen(true);
+  };
+
   if (loading) {
     return <Loading message="Cargando panel de soporte..." />;
   }
@@ -769,7 +784,7 @@ const AgentDashboard = () => {
                         alt="Imagen compartida" 
                         className="chat-image"
                         loading="lazy"
-                        onClick={() => window.open(msg.text, '_blank')}
+                        onClick={() => handleImageClick(msg.text)}
                       />
                     ) : (
                       msg.text
@@ -890,17 +905,17 @@ const AgentDashboard = () => {
                 className="sort-button"
                 onClick={() => setClosedSortAsc((prev) => !prev)}
                 title={closedSortAsc ? "Orden descendente" : "Orden ascendente"}
-                style={{marginLeft: 8, padding: '2px 8px', borderRadius: 4, border: '1px solid #3f12e2ff', background: '#1846a1ff'}}
+                style={{marginLeft: 8, padding: '2px 8px', borderRadius: 4, background: '#1846a1ff'}}
               >
                 {closedSortAsc ? (
                   <>
-                    ↑
-                    <span style={{marginLeft: 4}}>Asc</span>
+                    ↓
+                    <span style={{marginLeft: 3, fontSize: '14px'}}>Desc</span>
                   </>
                 ) : (
                   <>
-                    ↓
-                    <span style={{marginLeft: 4}}>Desc</span>
+                    ↑
+                    <span style={{marginLeft: 3, fontSize: '14px'}}>Asce</span>
                   </>
                 )}
               </button>
@@ -1003,6 +1018,13 @@ const AgentDashboard = () => {
           </div>
         </div>
       </div>
+
+      <ImageViewerModal
+        images={viewerImages}
+        currentIndex={currentImageIndex}
+        onClose={() => setIsImageViewerOpen(false)}
+        isOpen={isImageViewerOpen}
+      />
     </div>
   );
 };

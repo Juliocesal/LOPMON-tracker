@@ -4,6 +4,8 @@ import { supabase } from '../utils/supabaseClient';
 import type { Message } from '../hooks/types';
 import { RealtimeChannel, REALTIME_CHANNEL_STATES, REALTIME_SUBSCRIBE_STATES } from '@supabase/supabase-js';  
 import '../styles/chatWindow.css';
+import ImageViewerModal from './ImageViewerModal';
+import '../styles/imageViewer.css';
 
 // Utility functions moved to top
 const isImageUrl = (text: string) => {
@@ -60,7 +62,13 @@ interface ChatWindowProps {
   onNewChat?: () => void;
 }
 
-const Message: React.FC<{ message: ExtendedMessage; index: number }> = ({ message, index }) => {
+interface MessageProps {
+  message: ExtendedMessage;
+  index: number;
+  onImageClick: (imageUrl: string) => void;
+}
+
+const Message: React.FC<MessageProps> = ({ message, index, onImageClick }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const isImage = isImageUrl(message.text);
@@ -101,7 +109,7 @@ const Message: React.FC<{ message: ExtendedMessage; index: number }> = ({ messag
                 setHasError(true);
                 setIsLoaded(true);
               }}
-              onClick={() => window.open(message.text, '_blank')}
+              onClick={() => onImageClick(message.text)}
             />
           </div>
         ) : (
@@ -125,6 +133,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [liveMessages, setLiveMessages] = useState<ExtendedMessage[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [viewerImages, setViewerImages] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const endOfMessagesRef = useRef<HTMLDivElement | null>(null);
   const reconnectionAttempts = useRef(0);
@@ -527,6 +538,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [chatId, compressImage, onSendMessage]);
 
+  // Add this function before the return statement
+  const handleImageClick = (clickedImage: string) => {
+    const images = liveMessages
+      .filter(msg => isImageUrl(msg.text))
+      .map(msg => msg.text);
+    const index = images.indexOf(clickedImage);
+    setViewerImages(images);
+    setCurrentImageIndex(index);
+    setIsImageViewerOpen(true);
+  };
+
   const headerState = getHeaderState();
 
   return (
@@ -558,7 +580,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           ) : (
             <>
               {liveMessages.map((msg, index) => (
-                <Message key={msg.id || index} message={msg} index={index} />
+                <Message 
+                  key={msg.id || index} 
+                  message={msg} 
+                  index={index} 
+                  onImageClick={handleImageClick}
+                />
               ))}
               {/* Ref para hacer scroll */}
               <div ref={endOfMessagesRef}></div>
@@ -618,6 +645,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           )
         )}
       </div>
+      <ImageViewerModal
+        images={viewerImages}
+        currentIndex={currentImageIndex}
+        onClose={() => setIsImageViewerOpen(false)}
+        isOpen={isImageViewerOpen}
+      />
     </div>
   );
 };
