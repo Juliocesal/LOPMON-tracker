@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import ChatInput from './ChatInput';
 import { supabase } from '../utils/supabaseClient';
 import type { Message } from '../hooks/types';
@@ -203,6 +203,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setupChannel();
   }, [maxReconnectionAttempts]);
 
+  // Añadir función para verificar estado del chat
+  const checkChatStatus = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('status')
+        .eq('id', chatId)
+        .single();
+
+      if (error) throw error;
+      
+      if (data?.status === 'closed') {
+        localStorage.setItem(`chat_closed_${chatId}`, 'true');
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (error) {
+      console.error('Error checking chat status:', error);
+    }
+  }, [chatId]);
+
   const setupChannel = useCallback(() => {
     try {
       // Desuscribirse del canal previo si existe
@@ -244,12 +264,31 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       );
 
+      // Añadir suscripción específica para cambios en el estado del chat
+      channel.on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chats',
+          filter: `id=eq.${chatId}`,
+        },
+        (payload: any) => {
+          if (payload.new && payload.new.status === 'closed') {
+            localStorage.setItem(`chat_closed_${chatId}`, 'true');
+            window.dispatchEvent(new Event('storage'));
+          }
+        }
+      );
+
       // Suscribirse y manejar estado del canal
-      channel.subscribe((status) => {
+      channel.subscribe(async (status) => {
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
           setIsReconnecting(false);
           setChannelError(null);
           reconnectionAttempts.current = 0;
+          // Verificar estado del chat al reconectar
+          await checkChatStatus();
         } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
           handleReconnection();
         }
@@ -259,7 +298,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.error('Error al configurar el canal:', error);
       setChannelError('Error de conexión');
     }
-  }, [chatId, handleReconnection]);
+  }, [chatId, handleReconnection, checkChatStatus]);
 
   // Configurar intervalo de reconexión
   useEffect(() => {
@@ -549,6 +588,34 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setIsImageViewerOpen(true);
   };
 
+  // Modificar el useEffect que maneja el estado closed
+  useEffect(() => {
+    if (isChatClosed) {
+      localStorage.setItem(`chat_closed_${chatId}`, 'true');
+    }
+    
+    const handleStorageChange = () => {
+      const isClosed = localStorage.getItem(`chat_closed_${chatId}`);
+      if (isClosed === 'true') {
+        setLiveMessages(prev => [...prev]); // Forzar re-render
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Verificar estado inicial
+    checkChatStatus();
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [chatId, isChatClosed, checkChatStatus]);
+
+  // Modificar isActuallyClosed para que sea más robusto
+  const isActuallyClosed = useMemo(() => {
+    return isChatClosed || localStorage.getItem(`chat_closed_${chatId}`) === 'true';
+  }, [isChatClosed, chatId]);
+
   const headerState = getHeaderState();
 
   return (
@@ -588,7 +655,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
         {/* SOLO mostrar notificación y botón aquí abajo */}
         {!loading && (
-          isChatClosed ? (
+          isActuallyClosed ? (
             <div className="options-container" style={{ flexDirection: 'column', alignItems: 'center' }}>
               <div className="chat-closed-notification">
                 🔒 Este chat ha sido cerrado por el agente.
