@@ -58,7 +58,7 @@ const useChat = () => {
           // Primer mensaje del chatbot solo si no hay mensajes previos
           const initialMessage: Message = {
             role: 'bot',
-            text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu nombre?",
+            text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
           };
           await saveMessage(session.id, 'bot', initialMessage.text); // Guardar el mensaje en la tabla `messages`
           setMessages([initialMessage]);
