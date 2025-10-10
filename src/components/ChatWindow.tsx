@@ -420,21 +420,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [chatId, setupChannel, fetchMissedMessages]);
 
   // Inicializar con mensajes recibidos
-  useEffect(() => {
-    if (!initialized && messages.length > 0) {
-      setLiveMessages(messages);
-      
-      // Establecer el último ID conocido desde los mensajes iniciales
-      if (messages.length > 0) {
-        const lastMessage = messages[messages.length - 1] as ExtendedMessage;
-        if (lastMessage.id) {
-          lastMessageIdRef.current = lastMessage.id;
-        }
-      }
-      
-      setInitialized(true);
-    }
-  }, [messages, initialized]);
+  
 
   // Scroll automático al último mensaje
   useEffect(() => {
