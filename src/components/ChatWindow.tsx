@@ -288,28 +288,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       );
 
-      const fetchMessages = useCallback(async () => {
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    setLiveMessages(prev => {
-      // Evitar duplicados
-      const existingIds = new Set(prev.map(m => m.id));
-      const newMessages = data.filter((m: any) => !existingIds.has(m.id));
-      return [...prev, ...newMessages];
-    });
-
-  } catch (error) {
-    console.error('Error fetching messages on reconnect:', error);
-  }
-}, [chatId]);
-
       // Suscribirse y manejar estado del canal
       channel.subscribe(async (status) => {
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
@@ -322,21 +300,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           handleReconnection();
         }
       });
-
-      channel.subscribe(async (status) => {
-  if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
-    setIsReconnecting(false);
-    setChannelError(null);
-    reconnectionAttempts.current = 0;
-
-    // Fetch inicial para sincronizar mensajes que llegaron mientras estábamos desconectados
-    await fetchMessages();
-
-    await checkChatStatus();
-  } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
-    handleReconnection();
-  }
-});
 
     } catch (error) {
       console.error('Error al configurar el canal:', error);
@@ -386,6 +349,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       setInitialized(true);
     }
   }, [messages, initialized]);
+  
 
   // Scroll automático al último mensaje
   useEffect(() => {
