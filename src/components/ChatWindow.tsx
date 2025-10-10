@@ -229,6 +229,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [chatId]);
 
+  const fetchMessages = useCallback(async () => {
+  if (!chatId) return;
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    setLiveMessages((prev) => {
+      const ids = new Set(prev.map(m => m.id));
+      const newMsgs = data.filter((m: any) => !ids.has(m.id));
+      return [...prev, ...newMsgs];
+    });
+  } catch (error) {
+    console.error('Error fetching messages on reconnect:', error);
+  }
+}, [chatId]);
+
+
   const setupChannel = useCallback(() => {
     try {
       // Desuscribirse del canal previo si existe
@@ -270,6 +290,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       );
 
+      channel.subscribe(async (status) => {
+  if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+    setIsReconnecting(false);
+    setChannelError(null);
+    reconnectionAttempts.current = 0;
+
+    // Verificar estado del chat
+    await checkChatStatus();
+
+    // NUEVO: Traer mensajes pendientes
+    await fetchMessages();
+  } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
+    handleReconnection();
+  }
+});
+
+
       // Añadir suscripción específica para cambios en el estado del chat
       channel.on(
         'postgres_changes',
@@ -307,6 +344,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [chatId, handleReconnection, checkChatStatus]);
 
+  useEffect(() => {
+  if (!isReconnecting) return;
+  const interval = setInterval(() => {
+    fetchMessages();
+  }, 5000); // cada 5 segundos
+  return () => clearInterval(interval);
+}, [isReconnecting, fetchMessages]);
+
+
   // Configurar intervalo de reconexión
   useEffect(() => {
     const setupReconnection = () => {
@@ -317,6 +363,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       }, 30000);
     };
+
+    
 
     setupReconnection();
 
