@@ -36,6 +36,18 @@ declare global {
   }
 }
 
+
+const BOT_STATE_KEY = (chatId: string) => `bot_state_${chatId}`;
+
+const saveBotState = (chatId: string, state: string) => {
+  localStorage.setItem(BOT_STATE_KEY(chatId), state);
+};
+
+const getBotState = (chatId: string) => {
+  return localStorage.getItem(BOT_STATE_KEY(chatId)) || 'initial';
+};
+
+
 const preloadImage = (url: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -401,23 +413,39 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Inicializar canal y mensajes
   useEffect(() => {
-    if (chatId) {
-      // Cargar todos los mensajes inicialmente
-      const initializeMessages = async () => {
-        await fetchMissedMessages();
-      };
-      initializeMessages();
-      
-      setupChannel();
-    }
-
-    return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        channelRef.current = null;
-      }
+  if (chatId) {
+    // Cargar todos los mensajes inicialmente
+    const initializeMessages = async () => {
+      await fetchMissedMessages();
     };
-  }, [chatId, setupChannel, fetchMissedMessages]);
+
+    // Revisar estado del bot para no reiniciar la conversación
+const botState = getBotState(chatId);
+
+if (botState === 'initial') {
+  const initialMessage: ExtendedMessage = {
+    role: 'bot',
+    text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
+    created_at: new Date().toISOString(),
+  };
+
+  setLiveMessages(prev => [initialMessage, ...prev]);
+  saveBotState(chatId, 'askedName');
+}
+
+    initializeMessages();
+    
+    setupChannel();
+  }
+
+  return () => {
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      channelRef.current = null;
+    }
+  };
+}, [chatId, setupChannel, fetchMissedMessages]);
+
 
   // Inicializar con mensajes recibidos
   
