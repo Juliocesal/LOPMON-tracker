@@ -49,6 +49,7 @@ const preloadImage = (url: string): Promise<HTMLImageElement> => {
 interface ExtendedMessage extends Message {
   id?: string;
   temp?: boolean;
+  created_at?: string;
 }
 
 interface ChatWindowProps {
@@ -145,9 +146,64 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const reconnectIntervalRef = useRef<number | null>(null);
   const sessionKey = `chat_session_${chatId}`;
   const [isClosedLocal, setIsClosedLocal] = useState(isChatClosed);
+  const lastMessageIdRef = useRef<string | null>(null);
 
+  // Función para cargar mensajes perdidos durante la desconexión
+  const fetchMissedMessages = useCallback(async () => {
+    if (!chatId) return;
 
-  
+    try {
+      let query = supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+      // Si tenemos un último mensaje conocido, cargar solo los más recientes
+      if (lastMessageIdRef.current) {
+        query = query.gt('id', lastMessageIdRef.current);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const newMessages: ExtendedMessage[] = data.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          text: msg.text,
+          created_at: msg.created_at
+        }));
+
+        setLiveMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const filteredNew = newMessages.filter(msg => !existingIds.has(msg.id));
+          
+          if (filteredNew.length === 0) return prev;
+          
+          const combined = [...prev, ...filteredNew];
+          // Ordenar por fecha de creación
+          combined.sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateA - dateB;
+          });
+          
+          return combined;
+        });
+
+        // Actualizar el último ID conocido
+        const lastMessage = data[data.length - 1];
+        if (lastMessage?.id) {
+          lastMessageIdRef.current = lastMessage.id;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching missed messages:', error);
+    }
+  }, [chatId]);
+
   // Guardar estado del chat en localStorage
   const persistChatState = useCallback(() => {
     const state = {
@@ -155,7 +211,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       initialized,
       agentConnected,
       agentName,
-      lastUpdate: Date.now()
+      lastUpdate: Date.now(),
+      lastMessageId: lastMessageIdRef.current
     };
     try {
       localStorage.setItem(sessionKey, JSON.stringify(state));
@@ -174,6 +231,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         if (Date.now() - state.lastUpdate < 24 * 60 * 60 * 1000) {
           setLiveMessages(state.messages);
           setInitialized(true);
+          if (state.lastMessageId) {
+            lastMessageIdRef.current = state.lastMessageId;
+          }
         } else {
           localStorage.removeItem(sessionKey);
         }
@@ -203,8 +263,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       channelRef.current = null;
     }
 
+    // Cargar mensajes perdidos antes de reconectar el canal
+    await fetchMissedMessages();
     setupChannel();
-  }, [maxReconnectionAttempts]);
+  }, [maxReconnectionAttempts, fetchMissedMessages]);
 
   
   // Modificar la función checkChatStatus para incluir ambos estados
@@ -228,26 +290,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.error('Error checking chat status:', error);
     }
   }, [chatId]);
-
-  const fetchMessages = useCallback(async () => {
-  if (!chatId) return;
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    setLiveMessages((prev) => {
-      const ids = new Set(prev.map(m => m.id));
-      const newMsgs = data.filter((m: any) => !ids.has(m.id));
-      return [...prev, ...newMsgs];
-    });
-  } catch (error) {
-    console.error('Error fetching messages on reconnect:', error);
-  }
-}, [chatId]);
-
 
   const setupChannel = useCallback(() => {
     try {
@@ -278,7 +320,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               role: payload.new.role,
               text: payload.new.text,
               id: payload.new.id,
+              created_at: payload.new.created_at
             };
+
+            // Actualizar último ID conocido
+            if (newMessage.id) {
+              lastMessageIdRef.current = newMessage.id;
+            }
+
             setLiveMessages((prev) => {
               // Evitar duplicados
               if (prev.some(msg => msg.id === newMessage.id)) {
@@ -289,23 +338,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           }
         }
       );
-
-      channel.subscribe(async (status) => {
-  if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
-    setIsReconnecting(false);
-    setChannelError(null);
-    reconnectionAttempts.current = 0;
-
-    // Verificar estado del chat
-    await checkChatStatus();
-
-    // NUEVO: Traer mensajes pendientes
-    await fetchMessages();
-  } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
-    handleReconnection();
-  }
-});
-
 
       // Añadir suscripción específica para cambios en el estado del chat
       channel.on(
@@ -333,6 +365,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           reconnectionAttempts.current = 0;
           // Verificar estado del chat al reconectar
           await checkChatStatus();
+          // Cargar cualquier mensaje que pudo haberse perdido durante la desconexión
+          await fetchMissedMessages();
         } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
           handleReconnection();
         }
@@ -342,8 +376,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.error('Error al configurar el canal:', error);
       setChannelError('Error de conexión');
     }
-  }, [chatId, handleReconnection, checkChatStatus]);
-
+  }, [chatId, handleReconnection, checkChatStatus, fetchMissedMessages]);
 
   // Configurar intervalo de reconexión
   useEffect(() => {
@@ -355,8 +388,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       }, 30000);
     };
-
-    
 
     setupReconnection();
 
@@ -371,6 +402,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // Inicializar canal y mensajes
   useEffect(() => {
     if (chatId) {
+      // Cargar todos los mensajes inicialmente
+      const initializeMessages = async () => {
+        await fetchMissedMessages();
+      };
+      initializeMessages();
+      
       setupChannel();
     }
 
@@ -380,16 +417,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         channelRef.current = null;
       }
     };
-  }, [chatId, setupChannel]);
+  }, [chatId, setupChannel, fetchMissedMessages]);
 
   // Inicializar con mensajes recibidos
   useEffect(() => {
     if (!initialized && messages.length > 0) {
       setLiveMessages(messages);
+      
+      // Establecer el último ID conocido desde los mensajes iniciales
+      if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1] as ExtendedMessage;
+        if (lastMessage.id) {
+          lastMessageIdRef.current = lastMessage.id;
+        }
+      }
+      
       setInitialized(true);
     }
   }, [messages, initialized]);
-  
 
   // Scroll automático al último mensaje
   useEffect(() => {
