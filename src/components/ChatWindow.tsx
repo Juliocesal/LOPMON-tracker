@@ -151,7 +151,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // Función para cargar mensajes perdidos durante la desconexión
   const fetchMissedMessages = useCallback(async () => {
     if (!chatId) return;
-
+    if (!chatId || liveMessages.length > 0) return;
     try {
       let query = supabase
         .from('messages')
