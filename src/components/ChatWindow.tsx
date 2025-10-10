@@ -36,18 +36,6 @@ declare global {
   }
 }
 
-
-const BOT_STATE_KEY = (chatId: string) => `bot_state_${chatId}`;
-
-const saveBotState = (chatId: string, state: string) => {
-  localStorage.setItem(BOT_STATE_KEY(chatId), state);
-};
-
-const getBotState = (chatId: string) => {
-  return localStorage.getItem(BOT_STATE_KEY(chatId)) || 'initial';
-};
-
-
 const preloadImage = (url: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -134,7 +122,7 @@ const Message: React.FC<MessageProps> = ({ message, index, onImageClick }) => {
 };
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
-  
+  messages,
   onSendMessage,
   chatId,
   isChatClosed,
@@ -163,7 +151,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // Función para cargar mensajes perdidos durante la desconexión
   const fetchMissedMessages = useCallback(async () => {
     if (!chatId) return;
-    if (!chatId || liveMessages.length > 0) return;
+
     try {
       let query = supabase
         .from('messages')
@@ -413,42 +401,40 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Inicializar canal y mensajes
   useEffect(() => {
-  if (chatId) {
-    // Cargar todos los mensajes inicialmente
-    const initializeMessages = async () => {
-      await fetchMissedMessages();
-    };
-
-    // Revisar estado del bot para no reiniciar la conversación
-const botState = getBotState(chatId);
-
-if (botState === 'initial') {
-  const initialMessage: ExtendedMessage = {
-    role: 'bot',
-    text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
-    created_at: new Date().toISOString(),
-  };
-
-  setLiveMessages(prev => [initialMessage, ...prev]);
-  saveBotState(chatId, 'askedName');
-}
-
-    initializeMessages();
-    
-    setupChannel();
-  }
-
-  return () => {
-    if (channelRef.current) {
-      channelRef.current.unsubscribe();
-      channelRef.current = null;
+    if (chatId) {
+      // Cargar todos los mensajes inicialmente
+      const initializeMessages = async () => {
+        await fetchMissedMessages();
+      };
+      initializeMessages();
+      
+      setupChannel();
     }
-  };
-}, [chatId, setupChannel, fetchMissedMessages]);
 
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+    };
+  }, [chatId, setupChannel, fetchMissedMessages]);
 
   // Inicializar con mensajes recibidos
-  
+  useEffect(() => {
+    if (!initialized && messages.length > 0) {
+      setLiveMessages(messages);
+      
+      // Establecer el último ID conocido desde los mensajes iniciales
+      if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1] as ExtendedMessage;
+        if (lastMessage.id) {
+          lastMessageIdRef.current = lastMessage.id;
+        }
+      }
+      
+      setInitialized(true);
+    }
+  }, [messages, initialized]);
 
   // Scroll automático al último mensaje
   useEffect(() => {
