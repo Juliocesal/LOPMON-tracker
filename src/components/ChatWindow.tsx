@@ -144,7 +144,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [channelError, setChannelError] = useState<string | null>(null);
   const reconnectIntervalRef = useRef<number | null>(null);
   const sessionKey = `chat_session_${chatId}`;
+  const [isClosedLocal, setIsClosedLocal] = useState(isChatClosed);
 
+
+  
   // Guardar estado del chat en localStorage
   const persistChatState = useCallback(() => {
     const state = {
@@ -614,12 +617,31 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     };
   }, [chatId, isChatClosed, checkChatStatus]);
 
-  // Modificar isActuallyClosed para que sea más robusto
-  const isActuallyClosed = useMemo(() => {
-    return isChatClosed || 
-           localStorage.getItem(`chat_closed_${chatId}`) === 'true' || 
-           localStorage.getItem(`chat_status_${chatId}`) === 'resolved';
-  }, [isChatClosed, chatId]);
+  useEffect(() => {
+  // Se dispara cuando cambia la prop
+  setIsClosedLocal(isChatClosed);
+}, [isChatClosed]);
+
+// Manejar cambios desde Supabase o localStorage
+useEffect(() => {
+  const handleStorageChange = () => {
+    const closed = localStorage.getItem(`chat_closed_${chatId}`);
+    const status = localStorage.getItem(`chat_status_${chatId}`);
+    if (closed === 'true' || status === 'resolved') {
+      setIsClosedLocal(true);
+    }
+  };
+
+  window.addEventListener('storage', handleStorageChange);
+
+  return () => window.removeEventListener('storage', handleStorageChange);
+}, [chatId]);
+
+const isActuallyClosed = useMemo(() => {
+  return isClosedLocal;
+}, [isClosedLocal]);
+
+
 
   // Modificar el mensaje mostrado según el estado
   const getClosedMessage = useCallback(() => {
