@@ -376,20 +376,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Determinar el estado actual del header
   const getHeaderState = useCallback(() => {
-    if (loading) {
-      return 'loading';
-    }
-    if (isChatClosed) {
-      return 'closed';
-    }
-    if (agentConnected && agentName) {
-      return 'connected';
-    }
-    if (showSobranteWaitingLoader) {
-      return 'waiting';
-    }
-    return 'processing';
-  }, [loading, isChatClosed, agentConnected, agentName, showSobranteWaitingLoader]);
+  // Obtener status guardado en localStorage
+  const savedStatus = localStorage.getItem(`chat_status_${chatId}`);
+
+  if (loading) {
+    return 'loading';
+  }
+  if (savedStatus === 'closed' || savedStatus === 'resolved' || isChatClosed) {
+    return 'closed';
+  }
+  if (agentConnected && agentName) {
+    return 'connected';
+  }
+  if (showSobranteWaitingLoader) {
+    return 'waiting';
+  }
+  return 'processing';
+}, [loading, agentConnected, agentName, showSobranteWaitingLoader, chatId, isChatClosed]);
+
 
   const renderHeaderContent = useCallback(() => {
     const state = getHeaderState();
