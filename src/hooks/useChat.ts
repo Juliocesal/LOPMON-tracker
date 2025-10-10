@@ -84,6 +84,13 @@ const useChat = () => {
         // Reset en caso de error
         initialized.current = false;
       }
+
+      useEffect(() => {
+  if (initialized.current) return; // evita doble inicialización
+  initialized.current = true;
+  initChat();
+}, []);
+
     };
     initChat();
   }, []); // CAMBIADO: Remover chatId de las dependencias
