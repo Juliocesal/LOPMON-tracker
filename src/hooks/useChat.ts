@@ -55,17 +55,30 @@ const useChat = () => {
         }
 
         if (!existingMessages || existingMessages.length === 0) {
-          // Primer mensaje del chatbot solo si no hay mensajes previos
-          const initialMessage: Message = {
-            role: 'bot',
-            text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
-          };
-          await saveMessage(session.id, 'bot', initialMessage.text); // Guardar el mensaje en la tabla `messages`
-          setMessages([initialMessage]);
-          console.log('[useChat] Mensaje inicial del bot enviado:', initialMessage.text);
-        } else {
-          setMessages(existingMessages);
-        }
+  const initialMessage: Message = {
+    role: 'bot',
+    text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
+  };
+  await saveMessage(session.id, 'bot', initialMessage.text);
+  setMessages([initialMessage]);
+} else {
+  // Evitar duplicar el mensaje inicial
+  const hasInitialBotMessage = existingMessages.some(
+    (msg) => msg.role === 'bot' && msg.text.includes('¡Hola! Soy tu asistente virtual')
+  );
+
+  if (!hasInitialBotMessage) {
+    const initialMessage: Message = {
+      role: 'bot',
+      text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
+    };
+    await saveMessage(session.id, 'bot', initialMessage.text);
+    setMessages([...existingMessages, initialMessage]);
+  } else {
+    setMessages(existingMessages);
+  }
+}
+
       } catch (error) {
         console.error("Error al inicializar el chat:", error);
         // Reset en caso de error
