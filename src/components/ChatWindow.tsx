@@ -344,14 +344,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [chatId, handleReconnection, checkChatStatus]);
 
-  useEffect(() => {
-  if (!isReconnecting) return;
-  const interval = setInterval(() => {
-    fetchMessages();
-  }, 5000); // cada 5 segundos
-  return () => clearInterval(interval);
-}, [isReconnecting, fetchMessages]);
-
 
   // Configurar intervalo de reconexión
   useEffect(() => {
