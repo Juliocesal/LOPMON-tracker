@@ -26,74 +26,60 @@ const useChat = () => {
 
   // Crear una nueva sesión de chat al cargar el componente
   useEffect(() => {
-    // Evitar doble inicialización con useRef
-    if (initialized.current) {
-      console.log('[useChat] Ya inicializado, evitando duplicación');
-      return;
-    }
-    const initChat = async () => {
-      try {
-        // Marcar como inicializado antes de crear la sesión
-        initialized.current = true;
-        
-        // Limpiar estado anterior al iniciar nuevo chat
-        resetChatState();
-        
-        // Crear una nueva sesión de chat
-        const session = await createChatSession();
-        console.log('[useChat] Chat session created:', session); // LOG para identificar ID creado
-        setChatId(session.id);
+  // Evitar doble inicialización con useRef
+  if (initialized.current) {
+    console.log('[useChat] Ya inicializado, evitando duplicación');
+    return;
+  }
 
-        // Verificar si ya existen mensajes para este chat
-        // Suponiendo que existe una función getMessages(chatId) en ChatApi
-        let existingMessages: Message[] = [];
-        if (typeof session.id === 'string' && session.id.length > 0) {
-          if (typeof (window as any).getMessages === 'function') {
-            existingMessages = await (window as any).getMessages(session.id);
-            console.log('[useChat] Mensajes existentes para chatId', session.id, existingMessages);
+  const initChat = async () => {
+    try {
+      // Revisar si ya existe un chat activo
+      const existingChatId = localStorage.getItem('activeChatId');
+      let chatSessionId = '';
+
+      if (existingChatId) {
+        chatSessionId = existingChatId;
+        setChatId(chatSessionId);
+
+        // Traer mensajes existentes
+        if (typeof (window as any).getMessages === 'function') {
+          const existingMessages = await (window as any).getMessages(chatSessionId);
+          if (existingMessages?.length > 0) {
+            setMessages(existingMessages);
+            console.log('[useChat] Mensajes cargados del chat existente:', chatSessionId, existingMessages);
           }
         }
 
-        if (!existingMessages || existingMessages.length === 0) {
-  const initialMessage: Message = {
-    role: 'bot',
-    text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
-  };
-  await saveMessage(session.id, 'bot', initialMessage.text);
-  setMessages([initialMessage]);
-} else {
-  // Evitar duplicar el mensaje inicial
-  const hasInitialBotMessage = existingMessages.some(
-    (msg) => msg.role === 'bot' && msg.text.includes('¡Hola! Soy tu asistente virtual')
-  );
-
-  if (!hasInitialBotMessage) {
-    const initialMessage: Message = {
-      role: 'bot',
-      text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
-    };
-    await saveMessage(session.id, 'bot', initialMessage.text);
-    setMessages([...existingMessages, initialMessage]);
-  } else {
-    setMessages(existingMessages);
-  }
-}
-
-      } catch (error) {
-        console.error("Error al inicializar el chat:", error);
-        // Reset en caso de error
-        initialized.current = false;
+        initialized.current = true; // Marcar como inicializado
+        return; // No crear chat nuevo
       }
 
-      useEffect(() => {
-  if (initialized.current) return; // evita doble inicialización
-  initialized.current = true;
-  initChat();
-}, []);
+      // Si no hay chat existente, crear uno nuevo
+      const session = await createChatSession();
+      chatSessionId = session.id;
+      setChatId(chatSessionId);
+      localStorage.setItem('activeChatId', chatSessionId);
 
-    };
-    initChat();
-  }, []); // CAMBIADO: Remover chatId de las dependencias
+      // Mensaje inicial
+      const initialMessage: Message = {
+        role: 'bot',
+        text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
+      };
+
+      await saveMessage(chatSessionId, 'bot', initialMessage.text);
+      setMessages([initialMessage]);
+
+      initialized.current = true; // Marcar como inicializado
+    } catch (error) {
+      console.error('[useChat] Error inicializando chat:', error);
+      initialized.current = false; // Reset en caso de error
+    }
+  };
+
+  initChat();
+}, []); // Dependencias vacías para que solo corra al montar
+
 
   // Restaurar currentStep y formData desde localStorage si existen (solo para chats existentes)
   useEffect(() => {
