@@ -122,7 +122,7 @@ const Message: React.FC<MessageProps> = ({ message, index, onImageClick }) => {
 };
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
-  messages,
+  
   onSendMessage,
   chatId,
   isChatClosed,
