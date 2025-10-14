@@ -621,13 +621,18 @@ const AgentDashboard = () => {
 
   // Función para hacer scroll automático al final de los mensajes
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const container = document.querySelector('.messages-container') as HTMLElement;
+  if (container) {
+    // Forzar scroll al final exacto
+    container.scrollTop = container.scrollHeight;
+  }
+};
 
   // Efecto para hacer scroll cuando cambian los mensajes
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const timer = setTimeout(scrollToBottom, 30);
+  return () => clearTimeout(timer);
+}, [messages, isTyping, userTyping[selectedChatId || '']]);
 
   // Add this function after other handler functions
   const handlePaste = async (e: React.ClipboardEvent) => {
@@ -849,9 +854,8 @@ const AgentDashboard = () => {
                 
                 {/* Indicador de que el usuario está escribiendo */}
                 {selectedChatId && userTyping[selectedChatId] && (
-                  <div className="typing-indicator user-typing">
-                    <div className="typing-bubble">
-                      <strong>usuario:</strong> está escribiendo
+                  <div className="typing-indicator2 agent-typing">
+                    <div className="typing-bubble2">
                       <div className="typing-dots">
                         <span></span>
                         <span></span>
@@ -861,15 +865,7 @@ const AgentDashboard = () => {
                   </div>
                 )}
 
-                {/* Indicador de que el agente está escribiendo */}
-                {isTyping && (
-                  <div className="agent-typing-indicator">
-                    <span>Escribiendo...</span>
-                  </div>
-                )}
-
-                {/* Div para el scroll automático al final */}
-                <div ref={messagesEndRef} />
+                
               </div>
               <div className="flex flex-col gap-2">
                 {/* Indicador de que el agente está escribiendo */}

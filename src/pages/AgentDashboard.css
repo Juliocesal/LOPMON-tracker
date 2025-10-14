@@ -831,14 +831,31 @@
 }
 
 /* Indicadores de "escribiendo..." */
-.typing-indicator {
-  padding: 10px 15px;
-  margin: 10px;
+.typing-indicator2 {
+  padding: 0px 0px;
+  margin: 0px;
   border-radius: 15px;
   opacity: 0;
   transform: translateY(10px);
   animation: fadeInUp 0.3s ease forwards;
   width: fit-content;
+}
+
+.typing-bubble2 {
+  max-width: 100%;  
+  padding: 10px 15px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #6796fc 0%, #2563eb 100%);
+  color: #64748b;
+  font-size: 0.875rem;
+  display: flex;
+  gap: 0px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08), 0 1px 4px rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  backdrop-filter: blur(8px);
+  /* Eliminar position: fixed y ajustar margen */
+  margin: 0px 0 0px 0;
+  align-self: flex-start;
 }
 
 .typing-indicator.user {
