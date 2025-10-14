@@ -978,7 +978,7 @@ const isActuallyClosed = useMemo(() => {
                 />
               ))}
               
-              { (
+              {agentIsTyping && (
                 <div className="typing-indicator1 agent-typing">
                   <div className="typing-bubble">
                     <div className="typing-dots">
