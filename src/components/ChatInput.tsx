@@ -6,13 +6,15 @@ interface ChatInputProps {
   onImageUpload?: (file: File) => Promise<void>;
   isReconnecting?: boolean;
   uploadStatus?: string;
+  onInputChange?: (value: string) => void; // Add new optional prop
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
   onImageUpload,
   isReconnecting,
-  uploadStatus
+  uploadStatus,
+  onInputChange 
 }) => {
   const [message, setMessage] = useState('');
 
@@ -28,6 +30,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (e.key === 'Enter') {
       e.preventDefault(); // Evitar el comportamiento predeterminado del Enter
       handleSendMessage(); // Enviar el mensaje
+    }
+  };
+
+  // Update handleChange to use HTMLInputElement
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setMessage(value);
+    // Call onInputChange if provided
+    if (onInputChange) {
+      onInputChange(value);
     }
   };
 
@@ -87,10 +99,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
         <input
           type="text"
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           className="chat-text-input"
           placeholder="Escribe un mensaje..."
+          disabled={isReconnecting}
         />
         <button
           onClick={handleSendMessage}

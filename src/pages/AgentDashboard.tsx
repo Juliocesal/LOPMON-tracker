@@ -861,16 +861,18 @@ const AgentDashboard = () => {
                   </div>
                 )}
 
-                {/* Div para el scroll automático al final */}
-                <div ref={messagesEndRef} />
-              </div>
-              <div className="flex flex-col gap-2">
                 {/* Indicador de que el agente está escribiendo */}
                 {isTyping && (
                   <div className="agent-typing-indicator">
                     <span>Escribiendo...</span>
                   </div>
                 )}
+
+                {/* Div para el scroll automático al final */}
+                <div ref={messagesEndRef} />
+              </div>
+              <div className="flex flex-col gap-2">
+                {/* Indicador de que el agente está escribiendo */}
                 
                 <div className="message-input-container">
                   <div className="image-upload-buttons">

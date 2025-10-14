@@ -132,6 +132,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [agentIsTyping, setAgentIsTyping] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const endOfMessagesRef = useRef<HTMLDivElement | null>(null);
   const reconnectionAttempts = useRef(0);
@@ -506,10 +509,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [messages]);
 
-  // Scroll automático al último mensaje
+  // Modificar el efecto de scroll
   useEffect(() => {
-    endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [liveMessages]);
+    const scrollToBottom = () => {
+      if (endOfMessagesRef.current) {
+        endOfMessagesRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+          inline: "nearest"
+        });
+      }
+    };
+
+    // Añadir un pequeño delay para asegurar que el DOM se ha actualizado
+    const timeoutId = setTimeout(scrollToBottom, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [liveMessages, agentIsTyping]); // Se ejecuta cuando hay nuevos mensajes o cambia el estado de typing
 
   // Para mostrar opciones dinámicas
   const lastBotMessage = liveMessages.length > 0
@@ -874,6 +890,63 @@ const isActuallyClosed = useMemo(() => {
   // Obtener el estado del header y memorizarlo
   const currentHeaderState = useMemo(() => getHeaderState(), [getHeaderState]);
 
+  // Escuchar cuando el agente está escribiendo
+  useEffect(() => {
+    const typingSubscription = supabase
+      .channel('typing-indicators')
+      .on('broadcast', { event: 'agent-typing' }, (payload) => {
+        const { chatId: typingChatId, isTyping: agentTyping } = payload.payload;
+        if (typingChatId === chatId) {
+          setAgentIsTyping(agentTyping);
+          
+          // Auto-ocultar el indicador después de 3 segundos
+          if (agentTyping) {
+            setTimeout(() => {
+              setAgentIsTyping(false);
+            }, 3000);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      typingSubscription.unsubscribe();
+    };
+  }, [chatId]);
+
+  // Notificar que el usuario está escribiendo
+  const notifyUserTyping = (isTypingNow: boolean) => {
+    if (!chatId) return;
+    
+    supabase.channel('typing-indicators').send({
+      type: 'broadcast',
+      event: 'user-typing',
+      payload: {
+        chatId,
+        isTyping: isTypingNow
+      }
+    });
+  };
+
+  // Modificar el ChatInput para manejar el estado de typing
+  const handleInputChange = (value: string) => {
+    if (value.length > 0 && !isTyping) {
+      setIsTyping(true);
+      notifyUserTyping(true);
+    }
+    
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+    
+    const newTimeout = setTimeout(() => {
+      setIsTyping(false);
+      notifyUserTyping(false);
+    }, 1000);
+    
+    setTypingTimeout(newTimeout);
+  };
+
   return (
     <div className="chat-window-center-container">
       {channelError && (
@@ -904,12 +977,25 @@ const isActuallyClosed = useMemo(() => {
                   onImageClick={handleImageClick}
                 />
               ))}
-              {/* Ref para hacer scroll */}
-              <div ref={endOfMessagesRef}></div>
+              
+              { (
+                <div className="typing-indicator1 agent-typing">
+                  <div className="typing-bubble">
+                    <div className="typing-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Elemento para scroll, siempre al final */}
+              <div ref={endOfMessagesRef} style={{ height: '2px', width: '100%' }} />
             </>
           )}
         </div>
-
+        
         {/* SOLO mostrar notificación y botón aquí abajo */}
         {!loading && (
           isActuallyClosed ? (
@@ -952,6 +1038,7 @@ const isActuallyClosed = useMemo(() => {
                     onImageUpload={handleImageUpload}
                     isReconnecting={isReconnecting}
                     uploadStatus={uploadStatus}
+                    onInputChange={handleInputChange} // Nueva prop para manejar cambios en el input
                   />
                   {showSobranteWaitingLoader && (
                     <div className="chat-input-blocker"></div>
