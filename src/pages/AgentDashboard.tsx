@@ -1,7 +1,7 @@
 // src/pages/AgentDashboard.tsx
 import { useEffect, useState, useRef } from 'react';
-import { supabase } from '../utils/supabaseClient'; // Asegúrate de que la ruta sea correcta
-import { downloadConversation } from '../utils/downloadConversation'; // Agrega esta línea al inicio
+import { supabase } from '../utils/supabaseClient';
+import { downloadConversation } from '../utils/downloadConversation';
 import Loading from '../components/Loading';
 import { useNotifications } from '../contexts/NotificationContext';
 import NotificationSettings from '../components/NotificationSettings';
@@ -27,7 +27,7 @@ const AgentDashboard = () => {
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
   
   // Hook de notificaciones globales
-  const { notifyNewChat, notifyNewMessage, settings } = useNotifications();
+  const { notifyNewChat, settings } = useNotifications();
   
   // Ref para el final de los mensajes, usado para el auto-scroll
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -226,23 +226,23 @@ const AgentDashboard = () => {
 
     // Suscribirse a cambios en tiempo real para nuevos mensajes
     const subscription = supabase
-      .channel(`public:messages:${selectedChatId}`)
+      .channel(`messages:${selectedChatId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${selectedChatId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${selectedChatId}`
+        },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            const newMessage = payload.new;
-            setMessages((prev) => [...prev, newMessage]);
-            
-            // Notificar nuevo mensaje si es del usuario y no es el chat seleccionado actualmente
-            if (newMessage.role === 'user' && settings.visualEnabled && selectedChatId !== newMessage.chat_id) {
-              notifyNewMessage(
-                newMessage.chat_id,
-                'Usuario',
-                newMessage.text || 'Nuevo mensaje recibido'
-              );
-            }
+            // Actualizar mensajes solo si no existe ya
+            setMessages(prev => {
+              const exists = prev.some(msg => msg.id === payload.new.id);
+              if (exists) return prev;
+              return [...prev, payload.new];
+            });
           }
         }
       )
@@ -251,7 +251,7 @@ const AgentDashboard = () => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [selectedChatId, settings.visualEnabled, notifyNewMessage]);
+  }, [selectedChatId]);
 
   // Actualizar el estado del chat cuando un agente selecciona un chat
   const handleSelectChat = async (chatId: string) => {
@@ -319,13 +319,32 @@ const AgentDashboard = () => {
       clearTimeout(typingTimeout);
     }
 
-    // Guardar la respuesta del agente en la base de datos
-    const { error } = await supabase.from('messages').insert([
-      { chat_id: selectedChatId, role: 'agent', text: response },
-    ]);
+    try {
+      // Crear el nuevo mensaje
+      const { data: newMessage, error } = await supabase
+        .from('messages')
+        .insert([
+          { 
+            chat_id: selectedChatId, 
+            role: 'agent', 
+            text: response,
+            created_at: new Date().toISOString() // Asegurar que tenga timestamp
+          }
+        ])
+        .select('*')
+        .single();
 
-    if (error) console.error('Error al enviar mensaje:', error);
-    setResponse('');
+      if (error) throw error;
+
+      // Actualizar el estado local inmediatamente
+      setMessages(prev => [...prev, newMessage]);
+      
+      // Limpiar el input
+      setResponse('');
+    } catch (error) {
+      console.error('Error al enviar mensaje:', error);
+      alert('Error al enviar el mensaje. Por favor, intente nuevamente.');
+    }
   };
 
   // Cerrar el chat seleccionado

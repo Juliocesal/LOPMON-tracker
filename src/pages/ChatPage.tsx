@@ -1,5 +1,5 @@
 // src/pages/ChatPage.tsx
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import ChatWindow from '../components/ChatWindow';
 import useChat from '../hooks/useChat';
 import { supabase } from '../utils/supabaseClient';
@@ -11,13 +11,14 @@ import '../styles/chatWindow.css';
 
 
 const ChatPage = () => {
-  const { messages, sendMessage, chatId } = useChat();
+  const { messages, sendMessage, chatId, resetChatState } = useChat();
   const { notifySuccess, notifyInfo } = useNotifications();
   const [isChatClosed, setIsChatClosed] = useState(false);
   const [toastShown, setToastShown] = useState(false); // Estado para evitar duplicación de notificaciones
   const [agentConnected, setAgentConnected] = useState(false); // Estado para verificar si un agente está conectado
   const [agentName, setAgentName] = useState<string>(''); // Nombre del agente
   const [loading, setLoading] = useState(true); // Loading state
+  const [showChat, setShowChat] = useState(true);
 
   // Verificar el estado inicial del chat al cargar
   useEffect(() => {
@@ -125,6 +126,18 @@ const ChatPage = () => {
     };
   }, [chatId, toastShown]);
 
+  const handleNewChat = useCallback(() => {
+    setShowChat(false);
+    setTimeout(() => {
+      setIsChatClosed(false);
+      setToastShown(false);
+      setAgentConnected(false);
+      setAgentName('');
+      resetChatState();
+      setShowChat(true);
+    }, 100); // 100ms es suficiente
+  }, [resetChatState]);
+
   if (loading) {
     return <Loading message="Cargando chat..." />;
   }
@@ -152,16 +165,18 @@ const ChatPage = () => {
       <Toaster position="top-right" />
       <div className="flex justify-center items-center h-screen bg-gray-100">
         <div>
-          {/* Siempre mostrar ChatWindow */}
-          <ChatWindow
-            messages={messages}
-            onSendMessage={sendMessage}
-            chatId={chatId}
-            isChatClosed={isChatClosed}
-            agentConnected={agentConnected}
-            agentName={agentName}
-            loading={false}
-          />
+          {showChat && (
+            <ChatWindow
+              messages={messages}
+              onSendMessage={sendMessage}
+              chatId={chatId}
+              isChatClosed={isChatClosed}
+              agentConnected={agentConnected}
+              agentName={agentName}
+              loading={loading}
+              onNewChat={handleNewChat}
+            />
+          )}
         </div>
       </div>
     </>

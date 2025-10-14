@@ -45,13 +45,6 @@ const preloadImage = (url: string): Promise<HTMLImageElement> => {
   });
 };
 
-// Extender la interfaz Message para incluir propiedades opcionales
-interface ExtendedMessage extends Message {
-  id?: string;
-  temp?: boolean;
-  created_at?: string;
-}
-
 interface ChatWindowProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
@@ -64,7 +57,7 @@ interface ChatWindowProps {
 }
 
 interface MessageProps {
-  message: ExtendedMessage;
+  message: Message;  // Changed from ExtendedMessage to Message
   index: number;
   onImageClick: (imageUrl: string) => void;
 }
@@ -131,7 +124,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   loading = false,
   onNewChat
 }) => {
-  const [liveMessages, setLiveMessages] = useState<ExtendedMessage[]>([]);
+  const [liveMessages, setLiveMessages] = useState<Message[]>([]); // Changed from ExtendedMessage to Message
   const [initialized, setInitialized] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [viewerImages, setViewerImages] = useState<string[]>([]);
@@ -169,7 +162,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const newMessages: ExtendedMessage[] = data.map(msg => ({
+        const newMessages: Message[] = data.map(msg => ({
           id: msg.id,
           role: msg.role,
           text: msg.text,
@@ -293,129 +286,168 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const setupChannel = useCallback(() => {
     try {
-      // Desuscribirse del canal previo si existe
+      // Limpiar canal existente si hay uno
+      if (channelRef.current?.state === REALTIME_CHANNEL_STATES.joined) {
+        console.log('Canal ya suscrito, evitando suscripción múltiple');
+        return;
+      }
+
       if (channelRef.current) {
+        console.log('Limpiando canal existente');
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
 
-      // Crear canal nuevo
+      console.log('Creando nuevo canal');
       const channel = supabase.channel(`public:messages:${chatId}`, {
         config: { broadcast: { self: true } },
       });
+
+      // Configurar el canal antes de suscribirse
+      channel
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `chat_id=eq.${chatId}`,
+          },
+          (payload: any) => {
+            if (payload.new) {
+              const newMessage: Message = {
+                role: payload.new.role,
+                text: payload.new.text,
+                id: payload.new.id,
+                created_at: payload.new.created_at
+              };
+
+              if (newMessage.id) {
+                lastMessageIdRef.current = newMessage.id;
+              }
+
+              setLiveMessages((prev) => {
+                if (prev.some(msg => msg.id === newMessage.id)) {
+                  return prev;
+                }
+                return [...prev, newMessage];
+              });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'chats',
+            filter: `id=eq.${chatId}`,
+          },
+          (payload: any) => {
+            if (payload.new && (payload.new.status === 'closed' || payload.new.status === 'resolved')) {
+              localStorage.setItem(`chat_closed_${chatId}`, 'true');
+              localStorage.setItem(`chat_status_${chatId}`, payload.new.status);
+              window.dispatchEvent(new Event('storage'));
+            }
+          }
+        );
+
+      // Guardar referencia al canal antes de suscribirse
       channelRef.current = channel;
 
-      // Escuchar cambios en la tabla 'messages'
-      channel.on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `chat_id=eq.${chatId}`,
-        },
-        (payload: any) => {
-          if (payload.new) {
-            const newMessage: ExtendedMessage = {
-              role: payload.new.role,
-              text: payload.new.text,
-              id: payload.new.id,
-              created_at: payload.new.created_at
-            };
-
-            // Actualizar último ID conocido
-            if (newMessage.id) {
-              lastMessageIdRef.current = newMessage.id;
-            }
-
-            setLiveMessages((prev) => {
-              // Evitar duplicados
-              if (prev.some(msg => msg.id === newMessage.id)) {
-                return prev;
-              }
-              return [...prev, newMessage];
-            });
-          }
-        }
-      );
-
-      // Añadir suscripción específica para cambios en el estado del chat
-      channel.on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'chats',
-          filter: `id=eq.${chatId}`,
-        },
-        (payload: any) => {
-          if (payload.new && (payload.new.status === 'closed' || payload.new.status === 'resolved')) {
-            localStorage.setItem(`chat_closed_${chatId}`, 'true');
-            localStorage.setItem(`chat_status_${chatId}`, payload.new.status);
-            window.dispatchEvent(new Event('storage'));
-          }
-        }
-      );
-
-      // Suscribirse y manejar estado del canal
+      // Suscribirse una sola vez
       channel.subscribe(async (status) => {
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+          console.log('Canal suscrito exitosamente');
           setIsReconnecting(false);
           setChannelError(null);
           reconnectionAttempts.current = 0;
-          // Verificar estado del chat al reconectar
           await checkChatStatus();
-          // Cargar cualquier mensaje que pudo haberse perdido durante la desconexión
           await fetchMissedMessages();
         } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
+          console.log('Error en el canal, intentando reconexión');
           handleReconnection();
         }
       });
 
     } catch (error) {
       console.error('Error al configurar el canal:', error);
-      setChannelError('Error de conexión');
+      
     }
   }, [chatId, handleReconnection, checkChatStatus, fetchMissedMessages]);
 
-  // Configurar intervalo de reconexión
+  // Modificar el useEffect que maneja la inicialización del canal
   useEffect(() => {
-    const setupReconnection = () => {
-      reconnectIntervalRef.current = window.setInterval(() => {
-        if (!channelRef.current || channelRef.current.state !== REALTIME_CHANNEL_STATES.joined) {
-          console.log('Attempting to reconnect channel...');
-          setupChannel();
-        }
-      }, 30000);
-    };
+    if (!chatId) return;
 
-    setupReconnection();
-
-    return () => {
+    const cleanup = () => {
+      if (channelRef.current) {
+        console.log('Limpiando canal en useEffect');
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
       if (reconnectIntervalRef.current) {
         clearInterval(reconnectIntervalRef.current);
         reconnectIntervalRef.current = null;
       }
     };
-  }, [setupChannel]);
+
+    cleanup(); // Limpiar antes de configurar
+    setupChannel();
+
+    return cleanup;
+  }, [chatId, setupChannel]);
 
   // Inicializar canal y mensajes
   useEffect(() => {
-    if (chatId) {
-      // Cargar todos los mensajes inicialmente
-      const initializeMessages = async () => {
-        await fetchMissedMessages();
+    if (!chatId) {
+      // Si no hay chatId, limpiar todo y salir
+      const cleanup = () => {
+        if (channelRef.current) {
+          channelRef.current.unsubscribe();
+          channelRef.current = null;
+        }
+        if (reconnectIntervalRef.current) {
+          clearInterval(reconnectIntervalRef.current);
+          reconnectIntervalRef.current = null;
+        }
+        reconnectionAttempts.current = 0;
+        setIsReconnecting(false);
+        setChannelError(null);
       };
-      initializeMessages();
-      
-      setupChannel();
+      cleanup();
+      return;
     }
 
-    return () => {
+    // Función de limpieza completa
+    const cleanupChannel = () => {
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
+      if (reconnectIntervalRef.current) {
+        clearInterval(reconnectIntervalRef.current);
+        reconnectIntervalRef.current = null;
+      }
+      reconnectionAttempts.current = 0;
+      setIsReconnecting(false);
+      setChannelError(null);
+    };
+
+    // Limpiar cualquier canal previo ANTES de crear el nuevo
+    cleanupChannel();
+
+    // Inicializar mensajes y canal
+    const initialize = async () => {
+      await fetchMissedMessages();
+      setupChannel();
+    };
+
+    initialize();
+
+    // Cleanup al desmontar o al cambiar chatId
+    return () => {
+      cleanupChannel();
     };
   }, [chatId, setupChannel, fetchMissedMessages]);
 
@@ -423,18 +455,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   useEffect(() => {
     if (!initialized && messages.length > 0) {
       setLiveMessages(messages);
-      
-      // Establecer el último ID conocido desde los mensajes iniciales
-      if (messages.length > 0) {
-        const lastMessage = messages[messages.length - 1] as ExtendedMessage;
-        if (lastMessage.id) {
-          lastMessageIdRef.current = lastMessage.id;
-        }
-      }
-      
       setInitialized(true);
     }
   }, [messages, initialized]);
+
+  // Añadir un efecto para mantener los mensajes sincronizados
+  useEffect(() => {
+    if (initialized && messages.length > 0) {
+      setLiveMessages(prevMessages => {
+        const existingIds = new Set(prevMessages.map(m => m.id));
+        const newMessages = messages.filter(msg => !existingIds.has(msg.id));
+        return [...prevMessages, ...newMessages];
+      });
+    }
+  }, [messages]);
 
   // Scroll automático al último mensaje
   useEffect(() => {
@@ -742,7 +776,99 @@ const isActuallyClosed = useMemo(() => {
       : '🔒 Este chat ha sido cerrado por el agente.';
   }, [chatId]);
 
-  const headerState = getHeaderState();
+  // 1. Mover clearEntireAppState aquí arriba, antes de handleNewChat
+  const clearEntireAppState = useCallback(() => {
+    // Limpiar TODOS los items de localStorage relacionados con chats
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('chat_session_') || 
+          key.startsWith('chat_closed_') || 
+          key.startsWith('chat_status_'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Limpiar estado local
+    setLiveMessages([]);
+    setInitialized(false);
+    setIsClosedLocal(false);
+    lastMessageIdRef.current = null;
+    
+    // Limpiar cache de imágenes
+    if (window.__imageUrlCache) {
+      window.__imageUrlCache = {};
+    }
+    
+    // Desconectar canal
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      channelRef.current = null;
+    }
+    
+    // Limpiar intervalos
+    if (reconnectIntervalRef.current) {
+      clearInterval(reconnectIntervalRef.current);
+      reconnectIntervalRef.current = null;
+    }
+  }, []);
+
+  // 2. Ahora handleNewChat puede usar clearEntireAppState
+  const handleNewChat = useCallback(() => {
+    console.log('Iniciando nuevo chat - limpiando estado completo');
+    clearEntireAppState();
+    
+    // Marcar el chat actual como cerrado antes de crear uno nuevo
+    if (chatId) {
+      localStorage.setItem(`chat_closed_${chatId}`, 'true');
+    }
+    
+    if (onNewChat) {
+      onNewChat();
+    }
+  }, [clearEntireAppState, onNewChat, chatId]);
+
+  // Función para limpiar completamente el estado de la aplicación
+  const clearEntireAppStateDeprecated = useCallback(() => {
+    // Limpiar TODOS los items de localStorage relacionados con chats
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('chat_session_') || 
+          key.startsWith('chat_closed_') || 
+          key.startsWith('chat_status_'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Limpiar estado local
+    setLiveMessages([]);
+    setInitialized(false);
+    setIsClosedLocal(false);
+    lastMessageIdRef.current = null;
+    
+    // Limpiar cache de imágenes
+    if (window.__imageUrlCache) {
+      window.__imageUrlCache = {};
+    }
+    
+    // Desconectar canal
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      channelRef.current = null;
+    }
+    
+    // Limpiar intervalos
+    if (reconnectIntervalRef.current) {
+      clearInterval(reconnectIntervalRef.current);
+      reconnectIntervalRef.current = null;
+    }
+  }, []);
+
+  // Obtener el estado del header y memorizarlo
+  const currentHeaderState = useMemo(() => getHeaderState(), [getHeaderState]);
 
   return (
     <div className="chat-window-center-container">
@@ -752,10 +878,11 @@ const isActuallyClosed = useMemo(() => {
         </div>
       )}
       <div className="chat-window">
-        {/* Header profesional mejorado */}
-        <div className={`agent-header-pro ${headerState}`}>
+        {/* Usar currentHeaderState en vez de headerState */}
+        <div className={`agent-header-pro ${currentHeaderState}`}>
           {renderHeaderContent()}
         </div>
+        
         {/* Mensajes */}
         <div className="messages-container">
           {loading ? (
@@ -787,10 +914,10 @@ const isActuallyClosed = useMemo(() => {
                 {getClosedMessage()}
               </div>
               <button
-                onClick={() => onNewChat ? onNewChat() : window.location.reload()}
+                onClick={handleNewChat}
                 className="new-chat-button"
               >
-                Nuevo chat
+                Iniciar Chat Nuevo
               </button>
             </div>
           ) : (

@@ -1,7 +1,9 @@
 // src/hooks/types.ts
 export interface Message {
+  id?: string;
   role: 'bot' | 'user' | 'agent';
   text: string;
+  created_at?: string;
 }
 
 export interface SupabasePayload {
