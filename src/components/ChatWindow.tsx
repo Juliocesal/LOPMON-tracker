@@ -829,44 +829,6 @@ const isActuallyClosed = useMemo(() => {
     }
   }, [clearEntireAppState, onNewChat, chatId]);
 
-  // Función para limpiar completamente el estado de la aplicación
-  const clearEntireAppStateDeprecated = useCallback(() => {
-    // Limpiar TODOS los items de localStorage relacionados con chats
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('chat_session_') || 
-          key.startsWith('chat_closed_') || 
-          key.startsWith('chat_status_'))) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    
-    // Limpiar estado local
-    setLiveMessages([]);
-    setInitialized(false);
-    setIsClosedLocal(false);
-    lastMessageIdRef.current = null;
-    
-    // Limpiar cache de imágenes
-    if (window.__imageUrlCache) {
-      window.__imageUrlCache = {};
-    }
-    
-    // Desconectar canal
-    if (channelRef.current) {
-      channelRef.current.unsubscribe();
-      channelRef.current = null;
-    }
-    
-    // Limpiar intervalos
-    if (reconnectIntervalRef.current) {
-      clearInterval(reconnectIntervalRef.current);
-      reconnectIntervalRef.current = null;
-    }
-  }, []);
-
   // Obtener el estado del header y memorizarlo
   const currentHeaderState = useMemo(() => getHeaderState(), [getHeaderState]);
 
