@@ -65,19 +65,7 @@ const useChat = () => {
         }
 
         // Si no hay chat activo o está cerrado, crear uno nuevo
-        initialized.current = true;
-        const session = await createChatSession();
-        console.log('[useChat] Chat session created:', session);
-        setChatId(session.id);
-        localStorage.setItem('activeChatId', session.id);
-        setCurrentStep(0);
-
-        const initialMessage: Message = {
-          role: 'bot',
-          text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
-        };
-        await saveMessage(session.id, 'bot', initialMessage.text);
-        setMessages([initialMessage]);
+        await createNewChat();
 
       } catch (error) {
         console.error("Error al inicializar el chat:", error);
@@ -87,6 +75,47 @@ const useChat = () => {
 
     initChat();
   }, []); // CAMBIADO: Remover chatId de las dependencias
+
+  // Nueva función auxiliar para crear un nuevo chat
+  const createNewChat = async () => {
+    try {
+      initialized.current = true;
+      const session = await createChatSession();
+      console.log('[useChat] Chat session created:', session);
+      setChatId(session.id);
+      localStorage.setItem('activeChatId', session.id);
+      setCurrentStep(0);
+
+      // Agregar flag para controlar la inicialización del mensaje
+      const initialMessageKey = `initial_message_sent_${session.id}`;
+      
+      if (!localStorage.getItem(initialMessageKey)) {
+        const initialMessage: Message = {
+          role: 'bot',
+          text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
+        };
+        
+        // Guardar el mensaje en la base de datos
+        const savedMessage = await saveMessage(session.id, 'bot', initialMessage.text);
+        
+        // Actualizar el mensaje local con el ID recibido
+        if (savedMessage?.id) {
+          initialMessage.id = savedMessage.id;
+        }
+        
+        // Establecer el mensaje en el estado local
+        setMessages([initialMessage]);
+        
+        // Marcar que el mensaje inicial ya fue enviado
+        localStorage.setItem(initialMessageKey, 'true');
+      }
+      
+      return session;
+    } catch (error) {
+      console.error("Error al crear nuevo chat:", error);
+      throw error;
+    }
+  };
 
   // Función para reiniciar el estado del chat
   const resetChatState = async () => {
@@ -112,20 +141,11 @@ const useChat = () => {
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
 
-    // Crear nuevo chat
+    // Crear nuevo chat usando la función auxiliar
     try {
-      const session = await createChatSession();
-      setChatId(session.id);
-      localStorage.setItem('activeChatId', session.id);
-
-      const initialMessage: Message = {
-        role: 'bot',
-        text: "¡Hola! Soy tu asistente virtual de ESSILOR LUXOTTICA. ¿Cuál es tu Usuario de SAP?",
-      };
-      await saveMessage(session.id, 'bot', initialMessage.text);
-      setMessages([initialMessage]);
+      await createNewChat();
     } catch (error) {
-      console.error("Error al crear nuevo chat:", error);
+      console.error("Error al resetear el chat:", error);
     }
   };
 

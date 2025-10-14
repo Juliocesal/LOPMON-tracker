@@ -1,5 +1,5 @@
 // src/pages/ChatPage.tsx
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import ChatWindow from '../components/ChatWindow';
 import useChat from '../hooks/useChat';
 import { supabase } from '../utils/supabaseClient';
@@ -12,22 +12,53 @@ import '../styles/chatWindow.css';
 
 const ChatPage = () => {
   const { messages, sendMessage, chatId, resetChatState } = useChat();
-  const { notifySuccess, notifyInfo } = useNotifications();
+  const { notifySuccess } = useNotifications(); // Remove notifyInfo since it's not used
   const [isChatClosed, setIsChatClosed] = useState(false);
   const [toastShown, setToastShown] = useState(false); // Estado para evitar duplicación de notificaciones
   const [agentConnected, setAgentConnected] = useState(false); // Estado para verificar si un agente está conectado
+  const [agentDisconnected, setAgentDisconnected] = useState(false);
   const [agentName, setAgentName] = useState<string>(''); // Nombre del agente
   const [loading, setLoading] = useState(true); // Loading state
   const [showChat, setShowChat] = useState(true);
+  const toastIdRef = useRef<string | null>(null);
+
+  // Función para limpiar notificaciones existentes
+  const clearExistingToasts = useCallback(() => {
+    if (toastIdRef.current) {
+      toast.dismiss(toastIdRef.current);
+      toastIdRef.current = null;
+    }
+  }, []);
+
+  // Función para mostrar notificación del agente
+  const showAgentNotification = useCallback((type: 'connect' | 'disconnect', agentName: string) => {
+    clearExistingToasts();
+    
+    if (type === 'connect') {
+      toastIdRef.current = toast(
+        `El agente ${agentName || 'Desconocido'} se ha conectado al chat`, 
+        { 
+          duration: 4000,
+          icon: '✅'
+        }
+      );
+    } else {
+      toastIdRef.current = toast(
+        `El agente ${agentName || 'Desconocido'} se ha desconectado del chat`,
+        { 
+          duration: 4000,
+          icon: 'ℹ️'
+        }
+      );
+    }
+  }, [clearExistingToasts]);
 
   // Verificar el estado inicial del chat al cargar
   useEffect(() => {
     if (!chatId) return;
     let mounted = true;
 
-    console.log('[ChatPage] useEffect inicial, chatId:', chatId); // LOG para identificar ID recibido
-
-    (async () => {
+    const checkInitialStatus = async () => {
       try {
         setLoading(true);
         const { data, error } = await supabase
@@ -37,15 +68,17 @@ const ChatPage = () => {
           .single();
 
         if (mounted && !error) {
-          if (data?.status === 'resolved') {
+          if (data?.status === 'resolved' || data?.status === 'closed') {
             setIsChatClosed(true);
-            setToastShown(true); // Ya estaba cerrado al cargar
-          }
-          if (data?.agent_connected) {
-            setAgentConnected(true); // El agente ya estaba conectado al cargar
-            setAgentName(data.agent_name || 'Agente Desconocido'); // Guardar el nombre del agente
-            // Notificar que un agente ya estaba conectado
-            notifyInfo(`Agente ${data.agent_name || 'Desconocido'} está atendiendo tu chat`);
+            setToastShown(true);
+            setAgentConnected(false);
+          } else if (data?.agent_connected) {
+            setAgentConnected(true);
+            setAgentName(data.agent_name || 'Agente Desconocido');
+            if (!toastShown) {
+              showAgentNotification('connect', data.agent_name);
+              setToastShown(true);
+            }
           }
         }
       } catch (error) {
@@ -53,90 +86,79 @@ const ChatPage = () => {
       } finally {
         if (mounted) setLoading(false);
       }
-    })();
-
-    return () => {
-      mounted = false;
     };
-  }, [chatId]);
+
+    checkInitialStatus();
+    return () => { mounted = false; };
+  }, [chatId, showAgentNotification, toastShown]);
 
   // Suscribirse a cambios en tiempo real para el estado del chat
   useEffect(() => {
     if (!chatId) return;
 
-    let isSubscribed = true;
-    let subscription: any;
+    const subscription = supabase // Remove isSubscribed since it's not used
+      .channel(`public:chats:${chatId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chats',
+          filter: `id=eq.${chatId}`,
+        },
+        (payload) => {
+          const updatedChat = payload.new;
+          const previousChat = payload.old;
 
-    const subscribeToChannel = () => {
-      console.log('[ChatPage] Suscribiéndose a cambios en tiempo real para chatId:', chatId);
-
-      subscription = supabase
-        .channel(`public:chats:${chatId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'chats',
-            filter: `id=eq.${chatId}`,
-          },
-          (payload) => {
-            const updatedChat = payload.new;
-
-            // Verificar si el chat ha sido cerrado
-            if (updatedChat.status === 'resolved') {
-              setIsChatClosed(true);
-              if (!toastShown) {
-                toast('🔒 El agente ha cerrado el chat.', {
-                  icon: '🔕',
-                  duration: 4000,
-                  style: {
-                    background: '#fff',
-                    color: '#333',
-                    border: '1px solid #ccc',
-                  },
-                });
-                setToastShown(true); // Evitar duplicación
-              }
+          // Manejar cierre del chat
+          if (updatedChat.status === 'resolved' || updatedChat.status === 'closed') {
+            setIsChatClosed(true);
+            setAgentConnected(false);
+            if (!toastShown) {
+              clearExistingToasts();
+              toastIdRef.current = toast('🔒 El chat ha sido cerrado.', {
+                duration: 4000,
+              });
+              setToastShown(true);
             }
+            return;
+          }
 
-            // Notificar cuando el agente se conecta
+          // Manejar conexión/desconexión del agente
+          if (previousChat.agent_connected !== updatedChat.agent_connected) {
+            setAgentConnected(updatedChat.agent_connected);
             if (updatedChat.agent_connected) {
-              setAgentConnected(true);
-              setAgentName(updatedChat.agent_name || 'Agente Desconocido'); // Guardar el nombre del agente
-              // Notificación global
-              notifySuccess(`El agente ${updatedChat.agent_name || 'Desconocido'} se ha conectado al chat`);
+              setAgentName(updatedChat.agent_name || 'Agente Desconocido');
+              showAgentNotification('connect', updatedChat.agent_name);
+              setAgentDisconnected(false);
+            } else {
+              showAgentNotification('disconnect', agentName);
+              setAgentDisconnected(true);
             }
           }
-        )
-        .on('broadcast', { event: 'disconnect' }, () => {
-          console.warn('[ChatPage] Canal desconectado, reintentando suscripción...');
-          if (isSubscribed) {
-            setTimeout(subscribeToChannel, 1000); // Reintenta en 1 segundo
-          }
-        })
-        .subscribe();
-    };
-
-    subscribeToChannel();
+        }
+      )
+      .subscribe();
 
     return () => {
-      isSubscribed = false;
+      clearExistingToasts();
       if (subscription) subscription.unsubscribe();
     };
-  }, [chatId, toastShown]);
+  }, [chatId, agentName, showAgentNotification, clearExistingToasts, toastShown]);
 
   const handleNewChat = useCallback(() => {
     setShowChat(false);
+    clearExistingToasts();
     setTimeout(() => {
       setIsChatClosed(false);
       setToastShown(false);
       setAgentConnected(false);
+      setAgentDisconnected(false);
       setAgentName('');
       resetChatState();
       setShowChat(true);
-    }, 100); // 100ms es suficiente
-  }, [resetChatState]);
+    }, 100);
+  }, [resetChatState, clearExistingToasts]);
 
   if (loading) {
     return <Loading message="Cargando chat..." />;

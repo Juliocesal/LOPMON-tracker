@@ -54,6 +54,7 @@ interface ChatWindowProps {
   agentName?: string;
   loading?: boolean;
   onNewChat?: () => void;
+  agentDisconnected?: boolean;
 }
 
 interface MessageProps {
@@ -122,7 +123,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   agentConnected = false,
   agentName = '',
   loading = false,
-  onNewChat
+  onNewChat,
+  agentDisconnected = false,
 }) => {
   const [liveMessages, setLiveMessages] = useState<Message[]>([]); // Changed from ExtendedMessage to Message
   const [initialized, setInitialized] = useState(false);
@@ -286,24 +288,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const setupChannel = useCallback(() => {
     try {
-      // Limpiar canal existente si hay uno
-      if (channelRef.current?.state === REALTIME_CHANNEL_STATES.joined) {
-        console.log('Canal ya suscrito, evitando suscripción múltiple');
-        return;
-      }
-
+      // Prevenir múltiples suscripciones
       if (channelRef.current) {
-        console.log('Limpiando canal existente');
+        const currentState = channelRef.current.state;
+        // Si el canal ya está suscrito o en proceso de suscripción, salir
+        if (currentState === REALTIME_CHANNEL_STATES.joined || 
+            currentState === REALTIME_CHANNEL_STATES.joining) {
+          console.log('Canal ya activo o uniéndose, evitando suscripción duplicada');
+          return;
+        }
+        // Si el canal existe pero no está activo, desuscribir primero
+        console.log('Limpiando canal inactivo');
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
 
-      console.log('Creando nuevo canal');
+      console.log('Configurando nuevo canal');
       const channel = supabase.channel(`public:messages:${chatId}`, {
         config: { broadcast: { self: true } },
       });
 
-      // Configurar el canal antes de suscribirse
+      // Configurar handlers antes de suscribir
       channel
         .on(
           'postgres_changes',
@@ -352,51 +357,82 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           }
         );
 
-      // Guardar referencia al canal antes de suscribirse
+      // Guardar referencia antes de suscribir
       channelRef.current = channel;
 
-      // Suscribirse una sola vez
-      channel.subscribe(async (status) => {
+      // Suscribir una sola vez con manejo de estado mejorado
+      const subscription = channel.subscribe(async (status) => {
+        console.log('Estado de suscripción:', status);
+        
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
           console.log('Canal suscrito exitosamente');
           setIsReconnecting(false);
           setChannelError(null);
           reconnectionAttempts.current = 0;
-          await checkChatStatus();
-          await fetchMissedMessages();
-        } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
-          console.log('Error en el canal, intentando reconexión');
+          await Promise.all([
+            checkChatStatus(),
+            fetchMissedMessages()
+          ]);
+        } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || 
+                   status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
+          console.log('Error en canal, iniciando reconexión');
           handleReconnection();
         }
       });
 
+      return () => {
+        subscription.unsubscribe();
+      };
+
     } catch (error) {
       console.error('Error al configurar el canal:', error);
-      
+      handleReconnection();
     }
   }, [chatId, handleReconnection, checkChatStatus, fetchMissedMessages]);
 
   // Modificar el useEffect que maneja la inicialización del canal
   useEffect(() => {
     if (!chatId) return;
+    
+    console.log('Iniciando configuración del chat:', chatId);
+    
+    let mounted = true;
+    let cleanup: (() => void) | undefined;
 
-    const cleanup = () => {
-      if (channelRef.current) {
-        console.log('Limpiando canal en useEffect');
-        channelRef.current.unsubscribe();
-        channelRef.current = null;
-      }
-      if (reconnectIntervalRef.current) {
-        clearInterval(reconnectIntervalRef.current);
-        reconnectIntervalRef.current = null;
+    const initializeChat = async () => {
+      try {
+        if (!mounted) return;
+        
+        // Limpiar canal existente si hay
+        if (channelRef.current) {
+          console.log('Limpiando canal previo');
+          channelRef.current.unsubscribe();
+          channelRef.current = null;
+        }
+
+        // Cargar mensajes antes de establecer el canal
+        await fetchMissedMessages();
+        
+        // Configurar nuevo canal
+        if (mounted) {
+          cleanup = setupChannel();
+        }
+      } catch (error) {
+        console.error('Error en inicialización:', error);
       }
     };
 
-    cleanup(); // Limpiar antes de configurar
-    setupChannel();
+    initializeChat();
 
-    return cleanup;
-  }, [chatId, setupChannel]);
+    return () => {
+      mounted = false;
+      if (cleanup) cleanup();
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+    };
+  }, [chatId, setupChannel, fetchMissedMessages]);
 
   // Inicializar canal y mensajes
   useEffect(() => {
@@ -497,24 +533,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Determinar el estado actual del header
   const getHeaderState = useCallback(() => {
-  // Obtener status guardado en localStorage
-  const savedStatus = localStorage.getItem(`chat_status_${chatId}`);
+    // Obtener status guardado en localStorage
+    const savedStatus = localStorage.getItem(`chat_status_${chatId}`);
 
-  if (loading) {
-    return 'loading';
-  }
-  if (savedStatus === 'closed' || savedStatus === 'resolved' || isChatClosed) {
-    return 'closed';
-  }
-  if (agentConnected && agentName) {
-    return 'connected';
-  }
-  if (showSobranteWaitingLoader) {
-    return 'waiting';
-  }
-  return 'processing';
-}, [loading, agentConnected, agentName, showSobranteWaitingLoader, chatId, isChatClosed]);
-
+    if (loading) {
+      return 'loading';
+    }
+    if (savedStatus === 'closed' || savedStatus === 'resolved' || isChatClosed) {
+      return 'closed';
+    }
+    if (agentConnected && agentName) {
+      return agentDisconnected ? 'agent_disconnected' : 'connected';
+    }
+    if (showSobranteWaitingLoader) {
+      return 'waiting';
+    }
+    return 'processing';
+  }, [loading, agentConnected, agentName, showSobranteWaitingLoader, chatId, isChatClosed, agentDisconnected]);
 
   const renderHeaderContent = useCallback(() => {
     const state = getHeaderState();
@@ -538,6 +573,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         icon = <span>🔒</span>;
         statusClass = 'closed';
         break;
+      case 'agent_disconnected':
+        icon = <span>👤</span>;
+        statusClass = 'disconnected';
+        break;
       default:
         icon = <><div className="processing-spinner"></div><span>🤖</span></>;
         statusClass = 'processing';
@@ -552,6 +591,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           {state === 'waiting' && <><div className="header-title">Conectando Exception</div><div className="header-subtitle">Un Exception se unirá en breve...</div></>}
           {state === 'closed' && <><div className="header-title">Sesión Finalizada</div><div className="header-subtitle">El chat ha sido cerrado por el agente</div></>}
           {state === 'processing' && <><div className="header-title">Asistente Virtual</div><div className="header-subtitle">Procesando su consulta...</div></>}
+          {state === 'agent_disconnected' && 
+            <><div className="header-title">Agente Desconectado</div>
+            <div className="header-subtitle">{agentName} • Fuera de línea</div></>}
         </div>
         <div className={`header-icon ${statusClass}`} style={{ position: 'relative', marginLeft: 'auto' }}>
           {icon}
