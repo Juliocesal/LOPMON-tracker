@@ -4,7 +4,7 @@ import { supabase } from '../utils/supabaseClient';
 import Loading from '../components/Loading';
 import { useNotifications } from '../contexts/NotificationContext';
 import { Toaster, toast } from 'react-hot-toast';
-import '../styles/overs.css';
+import '../components/overs.css';
 
 interface Over {
   id: number;
@@ -15,8 +15,19 @@ interface Over {
   unit: string;
   stock_category: string;
   no_po: string;
-  usuario_id: string; // UUID
-  usuario_nombre?: string; // Nombre obtenido dinámicamente
+  usuario_id: string;
+  usuario_nombre?: string;
+}
+
+interface ColumnFilter {
+  fecha: string;
+  material: string;
+  grid_value: string;
+  qty: string;
+  unit: string;
+  stock_category: string;
+  no_po: string;
+  usuario_nombre: string;
 }
 
 const Overs = () => {
@@ -26,7 +37,21 @@ const Overs = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [newLine, setNewLine] = useState('');
-  const [agentName, setAgentName] = useState<string>(''); // Nombre del usuario autenticado
+  const [agentName, setAgentName] = useState<string>('');
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilter>({
+    fecha: '',
+    material: '',
+    grid_value: '',
+    qty: '',
+    unit: '',
+    stock_category: '',
+    no_po: '',
+    usuario_nombre: ''
+  });
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Over; direction: 'asc' | 'desc' } | null>(null);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { notifySuccess, notifyError } = useNotifications();
 
@@ -49,12 +74,10 @@ const Overs = () => {
     fetchAgentProfile();
   }, []);
 
-  // Cargar Overs y añadir nombre del usuario desde user_profiles
+  // Cargar Overs
   const fetchOvers = async () => {
     try {
       setLoading(true);
-
-      // Traer Overs
       const { data: oversData, error: oversError } = await supabase
         .from('overs')
         .select('*')
@@ -62,14 +85,12 @@ const Overs = () => {
 
       if (oversError) throw oversError;
 
-      // Traer todos los usuarios relacionados para mapear nombres
       const userIds = oversData?.map((o) => o.usuario_id) || [];
       const { data: usersData } = await supabase
         .from('user_profiles')
         .select('id, full_name')
         .in('id', userIds);
 
-      // Mapear nombre al Over
       const oversWithNames = oversData?.map((o: Over) => ({
         ...o,
         usuario_nombre: usersData?.find((u) => u.id === o.usuario_id)?.full_name || o.usuario_id
@@ -89,23 +110,119 @@ const Overs = () => {
     fetchOvers();
   }, []);
 
-  // Filtrado rápido
+  // Funciones de ordenamiento
+  const handleSort = (key: keyof Over) => {
+    setSortConfig({
+      key,
+      direction: sortConfig?.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
+    });
+  };
+
+  // Funciones de selección
+  const toggleRowSelection = (id: number) => {
+    setSelectedRows(prev =>
+      prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllRows = () => {
+    setSelectedRows(
+      selectedRows.length === currentOvers.length ? [] : currentOvers.map(o => o.id)
+    );
+  };
+
+  // Funciones de filtrado
+  const handleColumnFilter = (column: keyof ColumnFilter, value: string) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [column]: value
+    }));
+  };
+
+  const clearAllFilters = () => {
+    setColumnFilters({
+      fecha: '',
+      material: '',
+      grid_value: '',
+      qty: '',
+      unit: '',
+      stock_category: '',
+      no_po: '',
+      usuario_nombre: ''
+    });
+    setSearchTerm('');
+    setSortConfig(null);
+  };
+
+  // Aplicar todos los filtros
   useEffect(() => {
-    if (!searchTerm) setFilteredOvers(overs);
-    else {
-      setFilteredOvers(
-        overs.filter(
-          (o) =>
-            o.material.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.grid_value.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.stock_category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.no_po.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (o.usuario_nombre?.toLowerCase().includes(searchTerm.toLowerCase()))
-        )
+    let result = overs;
+
+    // Filtro de búsqueda global
+    if (searchTerm) {
+      result = result.filter(
+        (o) =>
+          o.material.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          o.grid_value.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          o.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          o.stock_category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          o.no_po.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (o.usuario_nombre?.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
-  }, [searchTerm, overs]);
+
+    // Filtros por columna
+    result = result.filter((o) => {
+      return Object.entries(columnFilters).every(([key, value]) => {
+        if (!value) return true;
+        const rowValue = o[key as keyof Over]?.toString().toLowerCase() || '';
+        return rowValue.includes(value.toLowerCase());
+      });
+    });
+
+    // Ordenamiento - TYPE-SAFE VERSION
+    if (sortConfig) {
+      result = [...result].sort((a, b) => {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+        
+        // Handle undefined/null values
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (bValue == null) return sortConfig.direction === 'asc' ? 1 : -1;
+        
+        // For numbers, compare numerically
+        if (sortConfig.key === 'qty') {
+          const numA = aValue as number;
+          const numB = bValue as number;
+          if (numA < numB) return sortConfig.direction === 'asc' ? -1 : 1;
+          if (numA > numB) return sortConfig.direction === 'asc' ? 1 : -1;
+          return 0;
+        }
+        
+        // For strings, compare alphabetically
+        const strA = aValue.toString().toLowerCase();
+        const strB = bValue.toString().toLowerCase();
+        if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    setFilteredOvers(result);
+    setCurrentPage(1);
+  }, [searchTerm, columnFilters, sortConfig, overs]);
+
+  // Paginación
+  const totalPages = Math.ceil(filteredOvers.length / itemsPerPage);
+  const currentOvers = filteredOvers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
 
   // Guardar nuevo Over
   const handleSave = async () => {
@@ -141,7 +258,7 @@ const Overs = () => {
           unit,
           stock_category,
           no_po,
-          usuario_id: user.id, // Guardamos solo el UUID
+          usuario_id: user.id,
         },
       ]);
 
@@ -157,45 +274,219 @@ const Overs = () => {
     }
   };
 
+  // Exportar datos
+  const exportToCSV = () => {
+    const headers = ['Fecha', 'Material', 'Grid Value', 'Qty', 'Unit', 'Stockcat.', 'No. PO', 'Usuario'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredOvers.map(o => [
+        new Date(o.fecha).toLocaleString(),
+        `"${o.material}"`,
+        `"${o.grid_value}"`,
+        o.qty,
+        `"${o.unit}"`,
+        `"${o.stock_category}"`,
+        `"${o.no_po}"`,
+        `"${o.usuario_nombre}"`
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `overs_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    notifySuccess('Datos exportados exitosamente');
+  };
+
   if (loading) return <Loading message="Cargando Overs..." />;
 
   return (
     <>
       <Toaster position="top-right" />
-      <div className="overs-container p-4">
-        <div className="flex justify-between mb-4">
-          <input
-            type="text"
-            placeholder="Buscar..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="overs-search"
-          />
-          <button
-            className="button-primary"
-            onClick={() => setModalOpen(true)}
-          >
-            + Nuevo Over
-          </button>
+      <div className="overs-container">
+        {/* Header con controles */}
+        <div className="overs-header">
+          <div className="overs-controls">
+            <div className="button-container">
+  <button className="button-primary" onClick={() => setModalOpen(true)}>
+    + Nuevo Over
+  </button>
+  <button className="button-secondary" onClick={exportToCSV}>
+    Exportar CSV
+  </button>
+  <button className="button-outline" onClick={clearAllFilters}>
+    Limpiar Filtros
+  </button>
+</div>
+
+          </div>
+          
+          {/* Estadísticas */}
+          <div className="overs-stats">
+            <span>Mostrando {currentOvers.length} de {filteredOvers.length} registros</span>
+            {Object.values(columnFilters).some(filter => filter) && (
+              <span className="filters-active">Filtros activos</span>
+            )}
+          </div>
         </div>
 
+        {/* Tabla con filtros SAP-like */}
         <div className="overs-table-container">
           <table className="overs-table">
             <thead>
+              {/* Fila de encabezados */}
               <tr>
-                <th>Fecha</th>
-                <th>Material</th>
-                <th>Grid Value</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Stockcat.</th>
-                <th>No. PO</th>
-                <th>Usuario</th>
+                <th className="select-column">
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.length === currentOvers.length && currentOvers.length > 0}
+                    onChange={selectAllRows}
+                  />
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('fecha')}
+                >
+                  Fecha {sortConfig?.key === 'fecha' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('material')}
+                >
+                  Material {sortConfig?.key === 'material' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('grid_value')}
+                >
+                  Grid Value {sortConfig?.key === 'grid_value' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('qty')}
+                >
+                  Qty {sortConfig?.key === 'qty' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('unit')}
+                >
+                  Unit {sortConfig?.key === 'unit' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('stock_category')}
+                >
+                  Stockcat. {sortConfig?.key === 'stock_category' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('no_po')}
+                >
+                  No. PO {sortConfig?.key === 'no_po' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  className="sortable"
+                  onClick={() => handleSort('usuario_nombre')}
+                >
+                  Usuario {sortConfig?.key === 'usuario_nombre' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+              </tr>
+              
+              {/* Fila de filtros */}
+              <tr className="filter-row">
+                <td></td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar fecha..."
+                    value={columnFilters.fecha}
+                    onChange={(e) => handleColumnFilter('fecha', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar material..."
+                    value={columnFilters.material}
+                    onChange={(e) => handleColumnFilter('material', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar grid value..."
+                    value={columnFilters.grid_value}
+                    onChange={(e) => handleColumnFilter('grid_value', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar cantidad..."
+                    value={columnFilters.qty}
+                    onChange={(e) => handleColumnFilter('qty', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar unidad..."
+                    value={columnFilters.unit}
+                    onChange={(e) => handleColumnFilter('unit', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar stockcat..."
+                    value={columnFilters.stock_category}
+                    onChange={(e) => handleColumnFilter('stock_category', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar No. PO..."
+                    value={columnFilters.no_po}
+                    onChange={(e) => handleColumnFilter('no_po', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Filtrar usuario..."
+                    value={columnFilters.usuario_nombre}
+                    onChange={(e) => handleColumnFilter('usuario_nombre', e.target.value)}
+                    className="column-filter"
+                  />
+                </td>
               </tr>
             </thead>
             <tbody>
-              {filteredOvers.map((o) => (
-                <tr key={o.id}>
+              {currentOvers.map((o) => (
+                <tr 
+                  key={o.id} 
+                  className={selectedRows.includes(o.id) ? 'selected' : ''}
+                >
+                  <td className="select-column">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.includes(o.id)}
+                      onChange={() => toggleRowSelection(o.id)}
+                    />
+                  </td>
                   <td>{new Date(o.fecha).toLocaleString()}</td>
                   <td>{o.material}</td>
                   <td>{o.grid_value}</td>
@@ -210,22 +501,62 @@ const Overs = () => {
           </table>
         </div>
 
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="overs-pagination">
+            <div className="pagination-controls">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="pagination-button"
+              >
+                ← Anterior
+              </button>
+              
+              <span className="pagination-info">
+                Página {currentPage} de {totalPages}
+              </span>
+              
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="pagination-button"
+              >
+                Siguiente →
+              </button>
+            </div>
+            
+            <div className="pagination-size">
+              <select
+                value={itemsPerPage}
+                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                className="page-size-select"
+              >
+                <option value={20}>20 por página</option>
+                <option value={50}>50 por página</option>
+                <option value={100}>100 por página</option>
+                <option value={200}>200 por página</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Modal */}
         {modalOpen && (
           <div className="overs-modal-backdrop">
             <div className="overs-modal">
-              <h2>Nuevo Over</h2>
+              <h2>Registrar Nuevo Over</h2>
               <p className="text-sm text-gray-600 mb-2">
-                Pega la línea: <span className="font-mono">Material GridValue Qty Unit Stockcat. NoPO</span>
+                Pega la línea completa: <span className="font-mono">Material GridValue Qty Unit Stockcat NoPO</span>
               </p>
               <textarea
-                rows={2}
-                className="border w-full p-2 rounded mb-4"
+                rows={3}
                 value={newLine}
                 onChange={(e) => setNewLine(e.target.value)}
-                placeholder="0AX4154SU	83622A56	1	NR	BRA999999	480123131"
+                placeholder="Ejemplo: 0AX4154SU 83622A56 1 NR BRA999999 480123131"
+                className="mb-4"
               />
-              <div className="flex justify-end gap-2">
+              <div className="overs-modal-actions">
                 <button
                   className="button-secondary"
                   onClick={() => setModalOpen(false)}
@@ -236,7 +567,7 @@ const Overs = () => {
                   className="button-primary"
                   onClick={handleSave}
                 >
-                  Guardar
+                  Guardar Over
                 </button>
               </div>
             </div>

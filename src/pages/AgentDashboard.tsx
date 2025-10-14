@@ -95,88 +95,186 @@ const AgentDashboard = () => {
   }, []);
 
   // Obtener todos los chats activos o transferidos al cargar el componente
-  const fetchActiveChats = async () => {
-    try {
+  // Obtener todos los chats activos o transferidos al cargar el componente
+const fetchActiveChats = async (forceRefresh = false) => {
+  try {
+    if (forceRefresh) {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('chats')
-        .select('*')
-        .in('status', ['active', 'transferred']);
-      if (error) console.error('Error al cargar los chats:', error);
-      else setActiveChats(data || []);
-    } catch (error) {
-      console.error('Error al cargar los chats:', error);
-    } finally {
-      setLoading(false);
     }
-  };
+    
+    console.log('Cargando chats activos...');
+    const { data, error } = await supabase
+      .from('chats')
+      .select('*')
+      .in('status', ['active', 'transferred'])
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error al cargar los chats:', error);
+      return;
+    }
+
+    console.log(`Chats cargados: ${data?.length || 0}`);
+    setActiveChats(data || []);
+    
+  } catch (error) {
+    console.error('Error al cargar los chats:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchActiveChats();
   }, []);
 
   // Suscribirse a cambios en tiempo real para nuevos chats
-  useEffect(() => {
-    const subscription = supabase
-      .channel('public:chats')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chats',
-          filter: 'status=in.(active,transferred)',
-        },
-        (payload) => {
-          // Evitar duplicados al agregar el nuevo chat
-          setActiveChats((prev) => {
-            if (prev.some((chat) => chat.id === payload.new.id)) return prev;
-            
-            // Notificar nuevo chat
-            if (settings.visualEnabled) {
-              notifyNewChat(
-                payload.new.id, 
-                `Chat iniciado por usuario ${payload.new.user_name || 'anónimo'}`
-              );
-            }
-            
-            return [...prev, payload.new];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'chats',
-          filter: 'status=in.(active,transferred)',
-        },
-        (payload) => {
-          // Actualizar chat si cambia su estado
-          setActiveChats((prev) =>
-            prev.map((chat) => (chat.id === payload.new.id ? payload.new : chat))
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'chats',
-        },
-        (payload) => {
-          // Eliminar chat si es borrado
-          setActiveChats((prev) => prev.filter((chat) => chat.id !== payload.old.id));
-        }
-      )
-      .subscribe();
+  // Suscribirse a cambios en tiempo real para nuevos chats - VERSIÓN MEJORADA
+useEffect(() => {
+  let retryCount = 0;
+  const maxRetries = 3;
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [settings.visualEnabled, notifyNewChat]);
+  const setupSubscription = async () => {
+    try {
+      // Primero cargar chats activos
+      await fetchActiveChats();
+
+      // Configurar suscripción
+      const subscription = supabase
+        .channel('chats-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'chats',
+            filter: 'status=in.(active,transferred)'
+          },
+          (payload) => {
+            console.log('Cambio detectado en chats:', payload);
+            
+            setActiveChats((prev) => {
+              let newChats = [...prev];
+              
+              switch (payload.eventType) {
+                case 'INSERT':
+                  // Verificar que no exista y agregar
+                  if (!newChats.some(chat => chat.id === payload.new.id)) {
+                    const newChat = payload.new;
+                    newChats = [...newChats, newChat];
+                    
+                    // Notificar nuevo chat si está habilitado
+                    if (settings.visualEnabled) {
+                      notifyNewChat(
+                        newChat.id, 
+                        `Chat iniciado por usuario ${newChat.user_name || 'anónimo'}`
+                      );
+                    }
+                  }
+                  break;
+                  
+                case 'UPDATE':
+                  // Actualizar chat existente o agregar si no existe
+                  const existingIndex = newChats.findIndex(chat => chat.id === payload.new.id);
+                  if (existingIndex >= 0) {
+                    newChats[existingIndex] = payload.new;
+                  } else {
+                    // Si es un update de un chat que no tenemos, podría ser que cambió de estado
+                    if (payload.new.status === 'active' || payload.new.status === 'transferred') {
+                      newChats = [...newChats, payload.new];
+                    }
+                  }
+                  break;
+                  
+                case 'DELETE':
+                  // Eliminar chat
+                  newChats = newChats.filter(chat => chat.id !== payload.old.id);
+                  break;
+              }
+              
+              return newChats;
+            });
+          }
+        )
+        .subscribe((status) => {
+          console.log('Estado de suscripción:', status);
+          if (status === 'SUBSCRIBED') {
+            retryCount = 0; // Resetear contador en éxito
+          }
+        });
+
+      return subscription;
+    } catch (error) {
+      console.error('Error configurando suscripción:', error);
+      throw error;
+    }
+  };
+
+  const initSubscription = async () => {
+    try {
+      const subscription = await setupSubscription();
+      
+      // Manejar reconexión
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          console.log('Página visible, verificando estado de suscripción...');
+          fetchActiveChats(); // Recargar chats cuando la página se vuelve visible
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        subscription.unsubscribe();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    } catch (error) {
+      console.error('Error en suscripción:', error);
+      
+      // Reintentar en caso de error
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`Reintentando suscripción (${retryCount}/${maxRetries})...`);
+        setTimeout(initSubscription, 2000 * retryCount);
+      }
+    }
+  };
+
+  const cleanup = initSubscription();
+
+  return () => {
+    if (cleanup) {
+      cleanup.then(cleanupFn => cleanupFn && cleanupFn());
+    }
+  };
+}, [settings.visualEnabled, notifyNewChat]);
+
+// Agregar verificación periódica
+useEffect(() => {
+  const interval = setInterval(() => {
+    // Verificar si la suscripción está activa y recargar si es necesario
+    fetchActiveChats(false); // Recarga suave cada 30 segundos
+  }, 30000);
+
+  return () => clearInterval(interval);
+}, []);
+
+// Agregar listener para eventos de conexión
+useEffect(() => {
+  const handleOnline = () => {
+    console.log('Conexión restaurada, recargando chats...');
+    fetchActiveChats(true);
+  };
+
+  window.addEventListener('online', handleOnline);
+  
+  return () => {
+    window.removeEventListener('online', handleOnline);
+  };
+}, []);
+
+// Agregar esta función de utilidad para debugging
+
 
   // Suscripción para detectar cuando el usuario está escribiendo
   useEffect(() => {
@@ -669,32 +767,48 @@ const AgentDashboard = () => {
         {/* Lista de Chats Activos */}
         <div className="chats-list">
           <div className="chats-list-header">
-            <div className="chats-list-title">
-              <h2 className="font-semibold">Chats Activos</h2>
-              {activeChats.length > 0 && (
-                <span className="chats-count-badge">{activeChats.length}</span>
-              )}
-            </div>
-            <div className="header-controls">
-              <button
-                className="reload-button"
-                onClick={fetchActiveChats}
-                title="Recargar chats"
-              >
-                {/* Icono recargar */}
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <path d="M4 4v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2.05 11A8 8 0 1 0 4 4l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-              
-              {/* Controles de notificaciones */}
-              <NotificationSettings compact={true} />
-            </div>
-          </div>
+  <div className="chats-list-title">
+    <h2 className="font-semibold">Chats Activos</h2>
+    {activeChats.length > 0 && (
+      <span className="chats-count-badge">{activeChats.length}</span>
+    )}
+    {/* Indicador de estado de conexión */}
+    <span 
+      className="connection-indicator" 
+      title="Estado de conexión en tiempo real"
+      style={{
+        display: 'inline-block',
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        backgroundColor: '#10B981',
+        marginLeft: '8px'
+      }}
+    ></span>
+  </div>
+  <div className="header-controls">
+    <button
+      className="reload-button"
+      onClick={() => fetchActiveChats(true)}
+      title="Forzar recarga de chats"
+    >
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+        <path d="M4 4v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M2.05 11A8 8 0 1 0 4 4l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </button>
+    
+    <NotificationSettings compact={true} />
+  </div>
+</div>
           <div className="chat-list-container">
-            {loading ? (
-              <Loading message="Cargando chats..." height="auto" />
+  {loading ? (
+    <div className="loading-chats">
+      <Loading message="Sincronizando chats..." height="auto" />
+      <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+        Verificando nuevos chats...
+      </div>
+    </div>
             ) : (
               activeChats.length > 0 ? (
                 <ul>
