@@ -4,7 +4,7 @@ import './NotificationContext.css';
 
 interface NotificationData {
   id: string;
-  type: 'new-chat' | 'message' | 'urgent' | 'info' | 'success' | 'warning' | 'error';
+  type: 'new-chat' | 'message' | 'urgent' | 'info' | 'success' | 'warning' | 'error' | 'chat-closed';
   title: string;
   message: string;
   timestamp: Date;
@@ -35,6 +35,7 @@ interface NotificationContextType {
     browserNotificationsEnabled: boolean;
   };
   updateSettings: (settings: Partial<NotificationContextType['settings']>) => void;
+  notifyChatClosed: (message?: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -104,6 +105,11 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
         case 'warning':
           oscillator.frequency.setValueAtTime(700, audioContext.currentTime);
           break;
+        case 'chat-closed':
+  oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+  oscillator.frequency.setValueAtTime(200, audioContext.currentTime + 0.2);
+  break;
+
         default:
           oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
       }
@@ -204,6 +210,15 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       duration: 8000
     });
   };
+  
+  const notifyChatClosed = (message: string = 'El chat ha sido cerrado por el agente') => {
+  addNotification({
+    type: 'chat-closed',
+    title: '🔒 Chat Cerrado',
+    message,
+    duration: 6000
+  });
+};
 
   const notifyNewMessage = (chatId: string, senderName: string, preview: string) => {
     addNotification({
@@ -273,9 +288,11 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     notifySuccess,
     notifyWarning,
     notifyError,
+    notifyChatClosed,
     settings,
     updateSettings
   };
+
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -313,6 +330,14 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
             <path d="M12 8V12M12 16H12.01" stroke="white" strokeWidth="2" strokeLinecap="round"/>
           </svg>
         );
+
+        case 'chat-closed':
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+      <circle cx="12" cy="12" r="10" fill="currentColor"/>
+    </svg>
+  );
       default:
         return (
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

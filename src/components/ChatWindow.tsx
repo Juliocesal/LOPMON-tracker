@@ -6,6 +6,7 @@ import { RealtimeChannel, REALTIME_CHANNEL_STATES, REALTIME_SUBSCRIBE_STATES } f
 import '../styles/chatWindow.css';
 import ImageViewerModal from './ImageViewerModal';
 import '../styles/imageViewer.css';
+import { useNotifications } from '../contexts/NotificationContext';
 
 // Utility functions moved to top
 const isImageUrl = (text: string) => {
@@ -267,7 +268,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setupChannel();
   }, [maxReconnectionAttempts, fetchMissedMessages]);
 
-  
+  const { notifyChatClosed } = useNotifications();
   // Modificar la función checkChatStatus para incluir ambos estados
   const checkChatStatus = useCallback(async () => {
     try {
@@ -357,6 +358,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               localStorage.setItem(`chat_closed_${chatId}`, 'true');
               localStorage.setItem(`chat_status_${chatId}`, payload.new.status);
               window.dispatchEvent(new Event('storage'));
+
+               notifyChatClosed();
             }
           }
         );
