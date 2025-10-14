@@ -12,7 +12,7 @@ import '../styles/chatWindow.css';
 
 const ChatPage = () => {
   const { messages, sendMessage, chatId, resetChatState } = useChat();
-  const { notifySuccess } = useNotifications(); // Remove notifyInfo since it's not used
+  const { notifySuccess } = useNotifications();
   const [isChatClosed, setIsChatClosed] = useState(false);
   const [toastShown, setToastShown] = useState(false); // Estado para evitar duplicación de notificaciones
   const [agentConnected, setAgentConnected] = useState(false); // Estado para verificar si un agente está conectado
@@ -76,6 +76,7 @@ const ChatPage = () => {
             setAgentConnected(true);
             setAgentName(data.agent_name || 'Agente Desconocido');
             if (!toastShown) {
+              notifySuccess(`Agente ${data.agent_name || 'Desconocido'} está listo para ayudarte`);
               showAgentNotification('connect', data.agent_name);
               setToastShown(true);
             }
@@ -90,7 +91,7 @@ const ChatPage = () => {
 
     checkInitialStatus();
     return () => { mounted = false; };
-  }, [chatId, showAgentNotification, toastShown]);
+  }, [chatId, showAgentNotification, toastShown, notifySuccess]);
 
   // Suscribirse a cambios en tiempo real para el estado del chat
   useEffect(() => {
@@ -174,6 +175,7 @@ const ChatPage = () => {
             chatId={''}
             isChatClosed={false}
             agentConnected={false}
+            agentDisconnected={false} // Add missing prop
             agentName=""
             loading={true}
           />
@@ -194,6 +196,7 @@ const ChatPage = () => {
               chatId={chatId}
               isChatClosed={isChatClosed}
               agentConnected={agentConnected}
+              agentDisconnected={agentDisconnected} 
               agentName={agentName}
               loading={loading}
               onNewChat={handleNewChat}

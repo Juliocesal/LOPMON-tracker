@@ -54,7 +54,7 @@ interface ChatWindowProps {
   agentName?: string;
   loading?: boolean;
   onNewChat?: () => void;
-  agentDisconnected?: boolean;
+  agentDisconnected: boolean;
 }
 
 interface MessageProps {
@@ -542,14 +542,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     if (savedStatus === 'closed' || savedStatus === 'resolved' || isChatClosed) {
       return 'closed';
     }
-    if (agentConnected && agentName) {
+    if (agentConnected) {
       return agentDisconnected ? 'agent_disconnected' : 'connected';
     }
     if (showSobranteWaitingLoader) {
       return 'waiting';
     }
     return 'processing';
-  }, [loading, agentConnected, agentName, showSobranteWaitingLoader, chatId, isChatClosed, agentDisconnected]);
+  }, [loading, agentConnected, agentDisconnected, showSobranteWaitingLoader, chatId, isChatClosed]);
 
   const renderHeaderContent = useCallback(() => {
     const state = getHeaderState();
