@@ -1,5 +1,5 @@
 // src/pages/AgentDashboard.tsx
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { downloadConversation } from '../utils/downloadConversation';
 import Loading from '../components/Loading';
@@ -29,8 +29,7 @@ const AgentDashboard = () => {
   // Hook de notificaciones globales
   const { notifyNewChat, settings } = useNotifications();
   
-  // Ref para el final de los mensajes, usado para el auto-scroll
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
 
   // Add new state for closed chats loading
   const [loadingClosedChats, setLoadingClosedChats] = useState(true);
