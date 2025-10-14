@@ -1068,10 +1068,11 @@
 }
 
 .typing-indicator1 {
+  position: relative;
   display: inline-flex;
-  padding: 6px 0px;
+  padding: 6px 0x;
   align-items: center;
-  height: 12px;
+  height: 30px;
   gap: 6px; /* más separación entre los dots */
 }
 

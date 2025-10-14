@@ -137,6 +137,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const endOfMessagesRef = useRef<HTMLDivElement | null>(null);
+  const typingRef = useRef<HTMLDivElement | null>(null);
   const reconnectionAttempts = useRef(0);
   const maxReconnectionAttempts = 3;
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -511,15 +512,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Modificar el efecto de scroll
   useEffect(() => {
-    const scrollToBottom = () => {
-      if (endOfMessagesRef.current) {
-        endOfMessagesRef.current.scrollIntoView({
-          behavior: "smooth",
-          block: "end",
-          inline: "nearest"
-        });
-      }
-    };
+  const scrollToBottom = () => {
+    if (agentIsTyping && typingRef.current) {
+      typingRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'end',
+        inline: 'nearest'
+      });
+    } else if (endOfMessagesRef.current) {
+      endOfMessagesRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'end',
+        inline: 'nearest'
+      });
+    }
+  };
 
     // Añadir un pequeño delay para asegurar que el DOM se ha actualizado
     const timeoutId = setTimeout(scrollToBottom, 100);
@@ -978,8 +985,8 @@ const isActuallyClosed = useMemo(() => {
                 />
               ))}
               
-              {agentIsTyping && (
-                <div className="typing-indicator1 agent-typing">
+              { agentIsTyping &&(
+                <div ref={typingRef} className="typing-indicator1 agent-typing">
                   <div className="typing-bubble">
                     <div className="typing-dots">
                       <span></span>
@@ -990,8 +997,9 @@ const isActuallyClosed = useMemo(() => {
                 </div>
               )}
 
+
               {/* Elemento para scroll, siempre al final */}
-              <div ref={endOfMessagesRef} style={{ height: '2px', width: '100%' }} />
+              <div ref={endOfMessagesRef} />
             </>
           )}
         </div>
