@@ -636,6 +636,9 @@ useEffect(() => {
     fetchClosedChats();
   }, []);
 
+
+
+
   // Improved image URL detection
   const isImageUrl = (text: string) => {
     if (!text) return false;
@@ -1150,13 +1153,13 @@ useEffect(() => {
                               {ticketLabel}
                             </span>
                             <div className="chat-item-badges">
-                              <span className="chat-time-badge">
+                              <span className="chat-time-badge" title="Tiempo de resolución">
                                 {/* Icono de tiempo */}
                                 <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                                   <circle cx="10" cy="10" r="8" stroke="#888" strokeWidth="2" fill="none"/>
                                   <path d="M10 6V10L13 12" stroke="#888" strokeWidth="2" strokeLinecap="round"/>
                                 </svg>
-                                {calculateElapsedTime(chat.created_at)}
+                                {`${Math.floor(chat.resolution_time / 60)}m ${chat.resolution_time % 60}s`}
                               </span>
                               <span className="chat-status-badge chat-status-badge--cerrado">
                                 {/* Icono cerrado */}
