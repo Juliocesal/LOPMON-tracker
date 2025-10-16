@@ -454,12 +454,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           clearInterval(reconnectIntervalRef.current);
           reconnectIntervalRef.current = null;
         }
+        console.log('ChatId cambiado a:', chatId, '- Reseteando estado de conexión');
         reconnectionAttempts.current = 0;
         setIsReconnecting(false);
         setChannelError(null);
       };
       cleanup();
-      return;
+      console.log('Sin chatId, limpiando todo');
+    clearEntireAppState();
+    return;
     }
 
     // Función de limpieza completa
@@ -858,6 +861,10 @@ const isActuallyClosed = useMemo(() => {
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
     
+     reconnectionAttempts.current = 0; // ← ESTE ES EL MÁS IMPORTANTE
+  setChannelError(null);
+  setIsReconnecting(false);
+
     // Limpiar estado local
     setLiveMessages([]);
     setInitialized(false);
@@ -871,21 +878,35 @@ const isActuallyClosed = useMemo(() => {
     
     // Desconectar canal
     if (channelRef.current) {
+    console.log('Desconectando canal existente durante reset');
+    try {
       channelRef.current.unsubscribe();
-      channelRef.current = null;
+    } catch (error) {
+      console.log('Error al desuscribir canal:', error);
     }
+    channelRef.current = null;
+  }
     
     // Limpiar intervalos
     if (reconnectIntervalRef.current) {
       clearInterval(reconnectIntervalRef.current);
       reconnectIntervalRef.current = null;
     }
-  }, []);
+
+    if (typingTimeout) {
+    clearTimeout(typingTimeout);
+    setTypingTimeout(null);
+  }
+
+console.log('Limpieza completada, reconnectionAttempts:', reconnectionAttempts.current);
+
+  }, [typingTimeout]);
 
   // 2. Ahora handleNewChat puede usar clearEntireAppState
   const handleNewChat = useCallback(() => {
     console.log('Iniciando nuevo chat - limpiando estado completo');
     clearEntireAppState();
+    
     
     // Marcar el chat actual como cerrado antes de crear uno nuevo
     if (chatId) {
@@ -893,10 +914,12 @@ const isActuallyClosed = useMemo(() => {
     }
     
     if (onNewChat) {
+      console.log('Ejecutando onNewChat callback');
       onNewChat();
     }
   }, [clearEntireAppState, onNewChat, chatId]);
 
+  
   // Obtener el estado del header y memorizarlo
   const currentHeaderState = useMemo(() => getHeaderState(), [getHeaderState]);
 
