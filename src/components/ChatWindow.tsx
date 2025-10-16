@@ -250,23 +250,38 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Función para manejar la reconexión
   const handleReconnection = useCallback(async () => {
+    console.log('🔄 Intentando reconexión para chat:', chatId, 'Intentos:', reconnectionAttempts.current);
     if (reconnectionAttempts.current >= maxReconnectionAttempts) {
-      setChannelError('Conexión perdida. Por favor, espera un momento.');
-      return;
-    }
+    console.log('❌ Máximo de reintentos alcanzado para chat:', chatId);
+    setChannelError('Conexión perdida. Por favor, espera un momento.');
+    setIsReconnecting(false);
+    return;
+  }
 
     setIsReconnecting(true);
     reconnectionAttempts.current += 1;
 
     if (channelRef.current) {
+      try {
       await channelRef.current.unsubscribe();
-      channelRef.current = null;
+    } catch (error) {
+      console.log('Error al desuscribir canal anterior:', error);
+    }
+    channelRef.current = null;
     }
 
+    const delay = Math.min(1000 * Math.pow(2, reconnectionAttempts.current - 1), 10000);
+  console.log(`⏳ Esperando ${delay}ms antes del reintento ${reconnectionAttempts.current}`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    if (!chatId) {
+    console.log('ChatId cambió durante la reconexión, cancelando');
+    return;
+  }
     // Cargar mensajes perdidos antes de reconectar el canal
     await fetchMissedMessages();
     setupChannel();
-  }, [maxReconnectionAttempts, fetchMissedMessages]);
+  }, [maxReconnectionAttempts, fetchMissedMessages, chatId]);
 
   const { notifyChatClosed } = useNotifications();
   // Modificar la función checkChatStatus para incluir ambos estados
@@ -312,6 +327,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       const channel = supabase.channel(`public:messages:${chatId}`, {
         config: { broadcast: { self: true } },
       });
+
+      setChannelError(null);
+      setIsReconnecting(false);
 
       // Configurar handlers antes de suscribir
       channel
@@ -369,7 +387,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       // Suscribir una sola vez con manejo de estado mejorado
       const subscription = channel.subscribe(async (status) => {
-        console.log('Estado de suscripción:', status);
+        console.log('Estado de suscripción:', status, 'para chat:', chatId);
         
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
           console.log('Canal suscrito exitosamente');
@@ -381,10 +399,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             fetchMissedMessages()
           ]);
         } else if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || 
-                   status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
-          console.log('Error en canal, iniciando reconexión');
-          handleReconnection();
-        }
+                   status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) 
+          {
+        console.log('❌ Error en canal para chat:', chatId);
+        // NO establecer error inmediatamente, intentar reconexión primero
+        handleReconnection();
+        } else if (status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT) {
+        console.log('⏰ Timeout en canal para chat:', chatId);
+        handleReconnection();
+      }
       });
 
       return () => {
@@ -395,7 +418,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.error('Error al configurar el canal:', error);
       handleReconnection();
     }
-  }, [chatId, handleReconnection, checkChatStatus, fetchMissedMessages]);
+  }, [chatId, handleReconnection, checkChatStatus, fetchMissedMessages, notifyChatClosed]);
 
   // Modificar el useEffect que maneja la inicialización del canal
   useEffect(() => {
