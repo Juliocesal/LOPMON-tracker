@@ -153,7 +153,7 @@ const Sidebar: React.FC = () => {
           <ul>
             <li>
               <NavLink 
-                to="" 
+                to="/exceptions-totes" 
                 className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
               >
                 <i className="fas fa-box-open"></i>

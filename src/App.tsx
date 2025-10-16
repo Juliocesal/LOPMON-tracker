@@ -22,6 +22,9 @@ import ExceptionsTotes from './components/ExceptionsTotes';
 import OpenPosOp from './components/OpenPosOp';
 import TicketsPage from './pages/TicketsPage'; // Importar la página de tickets
 import Overs from './components/Overs';
+import Notifications from './components/notifications';
+import ImportsTickets from './components/ImportsTickets';
+import Dashboard from './components/Dashboard';
 
 // Usa React.lazy para cargar OpenPos dinámicamente
 const OpenPos = React.lazy(() => import('./pages/OpenPos'));
@@ -62,6 +65,9 @@ const AppContent: React.FC = () => {
               <Route path="/reports" element={<Reports />} />
               <Route path="/create-ticket" element={<CreateTicket />} />
               <Route path="/agent-dashboard" element={<AgentDashboard />} />
+              <Route path="/notifications" element={<Notifications/>} />
+              <Route path="/imports-tickets" element={<ImportsTickets/>} />
+              <Route path="/dashboard" element={<Dashboard/>} />
             </Route>
 
             {/* Redirección por defecto */}
